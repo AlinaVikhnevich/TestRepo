@@ -1,0 +1,7 @@
+Differences between test_best_visual.Rmd and best_visual.Rmd
+-----------------------------------------------------------
+- Added reusable CSS for play/pause controls along with explicit slider-container display to keep Plotly sliders visible alongside the new buttons.
+- Introduced Play/Pause control blocks before each visual (map, income bars, continent lines) without altering the original titles, annotations, fonts, or backgrounds.
+- Customized JavaScript onRender hooks per visual to drive playback using Plotly restyle calls while keeping slider interactions synchronized.
+- Stabilized the map animation by using a fixed set of ISO-3 locations and labels from the world geometry for every frame and updating only yearly values.
+- Increased the world map animation speed (frame duration) to play roughly four times faster than the previous modified version.

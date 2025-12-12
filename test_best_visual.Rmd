@@ -67,8 +67,7 @@ h4.author, h4.date {
 #map-wrapper {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: center;
 }
 
 /* Playback controls styling */
@@ -78,6 +77,10 @@ h4.author, h4.date {
   justify-content: center;
   gap: 12px;
   margin: 10px 0 4px;
+}
+
+.slider-container {
+  display: block !important;
 }
 
 .playback-button {
@@ -248,8 +251,6 @@ get_year_data <- function(y) {
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
 
-map_frame_duration <- 650
-
 fig <- plot_ly(
   data = plot_df,
   type = "choropleth",
@@ -296,30 +297,29 @@ fig <- plot_ly(
   )
 )
 
+map_frame_duration <- 160
+map_locations <- world %>% sf::st_drop_geometry() %>% pull(iso_a3)
+map_text <- world %>% sf::st_drop_geometry() %>% pull(name)
+
 map_frames <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
   list(
     name = as.character(y),
-    locations = year_df$Code,
     z = year_df$life_expectancy,
-    text = year_df$Entity,
     customdata = year_df$Year
   )
 })
 
 steps <- lapply(seq_along(years_available), function(i) {
-  y <- years_available[i]
-  year_df <- map_frames[[i]]
+  year_frame <- map_frames[[i]]
   list(
-    label = y,
-    value = y,
+    label = years_available[i],
+    value = years_available[i],
     method = "restyle",
     args = list(
       list(
-        locations = list(year_df$locations),
-        z = list(year_df$z),
-        text = list(year_df$text),
-        customdata = list(year_df$customdata)
+        z = list(year_frame$z),
+        customdata = list(year_frame$customdata)
       )
     )
   )
@@ -437,7 +437,7 @@ fig <- fig %>% layout(
     ),
     len = 0.90,
     x = 0.05,
-    pad = list(t = 90),
+    pad = list(t = 99),
     steps = steps,
     bgcolor = "#AB7148",
     bordercolor = "#E6CFAE",
@@ -453,19 +453,21 @@ fig <- fig %>% layout(
   dragmode = "zoom"
 ) %>%
   config(scrollZoom = TRUE)
-
 fig$x$layout$sliders[[1]]$transition <- list(duration = 0)
-fig$x$layout$sliders[[1]]$y <- -0.08
 
 fig <- htmlwidgets::onRender(fig, data = list(
   frames = map_frames,
   years = years_available,
-  frameDuration = map_frame_duration
+  frameDuration = map_frame_duration,
+  locations = map_locations,
+  text = map_text
 ),
 "function(el, x, data) {
   const frames = data.frames || [];
   const years = data.years || [];
-  const frameDuration = data.frameDuration || 600;
+  const frameDuration = data.frameDuration || 160;
+  const locations = data.locations || [];
+  const text = data.text || [];
   const playBtn = document.getElementById('map-play');
   const pauseBtn = document.getElementById('map-pause');
   const sliderContainer = el.querySelector('.slider-container');
@@ -477,9 +479,9 @@ fig <- htmlwidgets::onRender(fig, data = list(
     if (idx < 0 || idx >= frames.length) return;
     const f = frames[idx];
     Plotly.restyle(el, {
-      locations: [f.locations],
+      locations: [locations],
+      text: [text],
       z: [f.z],
-      text: [f.text],
       customdata: [f.customdata]
     }, [0]);
     Plotly.relayout(el, {'sliders[0].active': idx, 'geo.fitbounds': false});
@@ -701,7 +703,6 @@ fig_income <- fig_income %>%
   )
 
 fig_income$x$layout$sliders[[1]]$transition <- list(duration = 0)
-fig_income$x$layout$sliders[[1]]$y <- -0.08
 
 fig_income <- htmlwidgets::onRender(fig_income, data = list(
   frames = income_frames,
@@ -922,7 +923,6 @@ fig_cont <- fig_cont %>%
   )
 
 fig_cont$x$layout$sliders[[1]]$transition <- list(duration = 0)
-fig_cont$x$layout$sliders[[1]]$y <- -0.08
 
 fig_cont <- htmlwidgets::onRender(fig_cont, data = list(
   frames = continent_frames,
