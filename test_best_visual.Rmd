@@ -303,6 +303,9 @@ fig <- plot_ly(
 )
 
 map_frame_duration <- 100
+map_frame_duration <- 650
+map_locations <- plot_df$Code
+map_text <- plot_df$Entity
 
 map_frames <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
@@ -469,6 +472,7 @@ fig <- htmlwidgets::onRender(fig, data = list(
   const frames = data.frames || [];
   const years = data.years || [];
   const frameDuration = data.frameDuration || 160;
+  const frameDuration = data.frameDuration || 600;
   const locations = data.locations || [];
   const text = data.text || [];
   const playBtn = document.getElementById('map-play');
