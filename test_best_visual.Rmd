@@ -617,6 +617,19 @@ income_frame_opts <- list(
   transition = list(duration = 0),
   mode = "immediate"
 )
+  income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
 
 income_payload <- list(
   years = income_years,
