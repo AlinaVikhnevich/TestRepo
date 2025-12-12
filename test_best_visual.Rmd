@@ -272,6 +272,7 @@ fig <- plot_ly(
   )
 )
 
+map_steps <- lapply(years_available, function(y) {
 map_frames <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
 
@@ -297,6 +298,8 @@ map_frame_opts <- list(
 map_steps <- lapply(years_available, function(y) {
   list(
     label = y,
+    method = "skip",
+    args = list()
     method = "animate",
     args = list(
       list(as.character(y)),
@@ -325,6 +328,19 @@ map_buttons <- list(
         transition = list(duration = 0)
       )
     )
+  )
+)
+
+map_buttons <- list(
+  list(
+    label = "Play",
+    method = "skip",
+    args = list()
+  ),
+  list(
+    label = "Pause",
+    method = "skip",
+    args = list()
   )
 )
 
@@ -467,6 +483,8 @@ fig <- fig %>% layout(
     x = 0.05,
     pad = list(t = 99),
     steps = map_steps,
+    bgcolor = "#AB7148",
+    bordercolor = "#E6CFAE",
       bgcolor = "#AB7148",
       bordercolor = "#E6CFAE",
     font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
@@ -475,6 +493,11 @@ fig <- fig %>% layout(
     type = "buttons",
     showactive = FALSE,
     direction = "right",
+    x = 0.5,
+    y = -0.08,
+    xanchor = "center",
+    yanchor = "top",
+    pad = list(t = 10),
     x = 0.05,
     y = -0.22,
     xanchor = "left",
@@ -652,6 +675,7 @@ fig_income <- plot_ly(
   )
 )
 
+income_steps <- lapply(income_years, function(y) {
 income_frames <- lapply(income_years, function(y) {
   year_df <- get_income_year(y)
   list(
@@ -678,6 +702,8 @@ income_frame_opts <- list(
 income_steps <- lapply(income_years, function(y) {
   list(
     label = y,
+    method = "skip",
+    args = list()
     method = "animate",
     args = list(
       list(as.character(y)),
@@ -707,6 +733,27 @@ income_buttons <- list(
       )
     )
   )
+)
+
+income_buttons <- list(
+  list(
+    label = "Play",
+    method = "skip",
+    args = list()
+  ),
+  list(
+    label = "Pause",
+    method = "skip",
+    args = list()
+  )
+)
+
+income_speed_ms <- 260
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
 )
 
 income_buttons <- list(
@@ -809,6 +856,11 @@ fig_income <- fig_income %>%
       type = "buttons",
       showactive = FALSE,
       direction = "right",
+      x = 0.5,
+      y = -0.08,
+      xanchor = "center",
+      yanchor = "top",
+      pad = list(t = 10),
       x = 0.01,
       y = -0.12,
       xanchor = "left",
@@ -899,6 +951,7 @@ for (i in seq_along(continents)) {
     )
 }
 
+continent_steps <- lapply(continent_years, function(y) {
 continent_frames <- lapply(continent_years, function(y) {
   paths <- get_continent_paths(y)
   list(
@@ -918,6 +971,8 @@ continent_frame_opts <- list(
 continent_steps <- lapply(continent_years, function(y) {
   list(
     label = y,
+    method = "skip",
+    args = list()
     method = "animate",
     args = list(
       list(as.character(y)),
@@ -947,6 +1002,27 @@ continent_buttons <- list(
       )
     )
   )
+)
+
+continent_buttons <- list(
+  list(
+    label = "Play",
+    method = "skip",
+    args = list()
+  ),
+  list(
+    label = "Pause",
+    method = "skip",
+    args = list()
+  )
+)
+
+continent_speed_ms <- 320
+continent_payload <- list(
+  years = continent_years,
+  paths = continent_year_values,
+  selected_year = selected_cont_year,
+  speed_ms = continent_speed_ms
 )
 
 continent_buttons <- list(
@@ -1038,6 +1114,11 @@ fig_cont <- fig_cont %>%
       type = "buttons",
       showactive = FALSE,
       direction = "right",
+      x = 0.5,
+      y = -0.08,
+      xanchor = "center",
+      yanchor = "top",
+      pad = list(t = 10),
       x = 0.01,
       y = -0.10,
       xanchor = "left",
