@@ -67,8 +67,7 @@ h4.author, h4.date {
 #map-wrapper {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: center;
 }
 
 /* Playback controls styling */
@@ -78,6 +77,10 @@ h4.author, h4.date {
   justify-content: center;
   gap: 12px;
   margin: 10px 0 4px;
+}
+
+.slider-container {
+  display: block !important;
 }
 
 .playback-button {
@@ -230,10 +233,12 @@ coverage_year <- df %>%
 ```
 
 ```{r life-expectancy-map}
+map_base <- world %>%
+  sf::st_drop_geometry() %>%
+  select(iso_a3, name)
+
 get_year_data <- function(y) {
-  full <- world %>%
-    sf::st_drop_geometry() %>%
-    select(iso_a3, name)
+  full <- map_base
 
   year_values <- df %>%
     filter(Year == y) %>%
@@ -247,6 +252,9 @@ get_year_data <- function(y) {
 
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
+
+map_locations <- map_base %>% pull(iso_a3)
+map_text <- map_base %>% pull(name)
 
 fig <- plot_ly(
   data = plot_df,
@@ -294,6 +302,7 @@ fig <- plot_ly(
   )
 )
 
+map_frame_duration <- 100
 map_frame_duration <- 650
 map_locations <- plot_df$Code
 map_text <- plot_df$Entity
@@ -462,6 +471,7 @@ fig <- htmlwidgets::onRender(fig, data = list(
 "function(el, x, data) {
   const frames = data.frames || [];
   const years = data.years || [];
+  const frameDuration = data.frameDuration || 160;
   const frameDuration = data.frameDuration || 600;
   const locations = data.locations || [];
   const text = data.text || [];
