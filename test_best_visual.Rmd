@@ -1,0 +1,993 @@
+---
+title: "Best Visualization"
+author: "Alina Vikhnevich"
+date: "December 10, 2025"
+output: html_document
+---
+
+```{css, echo=FALSE}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 18px;
+
+  background-image: url('https://images.pexels.com/photos/235985/pexels-photo-235985.jpeg');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  color: #1f2933;
+}
+
+.main-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.visual-section {
+  width: 100%;
+  display: block;
+  margin: 60px auto 140px;
+  padding: 20px 0 160px;
+  clear: both;
+  position: relative;
+  overflow: visible;
+}
+
+.visual-section .html-widget {
+  width: 100% !important;
+  position: relative !important;
+  display: block;
+  min-height: 620px;
+}
+
+h1.title {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 30px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.2;
+}
+
+h4.author, h4.date {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 16px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.1;
+}
+
+#map-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Playback controls styling */
+.playback-controls {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 10px 0 4px;
+}
+
+.playback-button {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 18px;
+  background-color: rgba(171, 113, 72, 0.85);
+  color: #1f2933;
+  border: 1px solid #E6CFAE;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.playback-button:hover {
+  background-color: rgba(171, 113, 72, 0.95);
+  transform: translateY(-1px);
+}
+
+.playback-button:active {
+  transform: translateY(0);
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r load-libraries, include=FALSE}
+library(tidyverse)
+library(readr)
+library(jsonlite)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(plotly)
+library(viridis)
+library(htmltools)
+library(dplyr)
+```
+
+```{r import-data, include=FALSE}
+df <- read_csv("/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv")
+metadata <- fromJSON("/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.metadata.json")
+
+df <- df %>%
+  mutate(
+    Code = case_when(
+      Code == "OWID_KOS" ~ "XKX",   # Kosovo
+      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
+      TRUE               ~ Code
+    )
+  ) %>%
+  filter(str_detect(Code, "^[A-Z]{3}$")) %>%   # keep only ISO-like codes (3 letters)
+  select(Entity, Code, Year, `Period life expectancy at birth`) %>%
+  rename(life_expectancy = `Period life expectancy at birth`)
+```
+
+```{r load-shapefile, include=FALSE}
+# Load base Natural Earth country polygons
+# Base countries from Natural Earth
+world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+
+# Union Somalia + Somaliland into one Somalia polygon
+somalia_union <- world_raw %>%
+  filter(name %in% c("Somalia", "Somaliland")) %>%
+  mutate(iso_a3 = "SOM", name = "Somalia") %>%
+  group_by(iso_a3, name) %>%
+  summarise(geometry = sf::st_union(geometry), .groups = "drop")
+
+# Union Cyprus + N. Cyprus into one Cyprus polygon
+cyprus_union <- world_raw %>%
+  filter(name %in% c("Cyprus", "N. Cyprus")) %>%
+  mutate(iso_a3 = "CYP", name = "Cyprus") %>%
+  group_by(iso_a3, name) %>%
+  summarise(geometry = sf::st_union(geometry), .groups = "drop")
+
+# Remove the pieces we are replacing and fix some ISO codes
+world_countries <- world_raw %>%
+  filter(!name %in% c("Somalia", "Somaliland", "Cyprus", "N. Cyprus")) %>%
+  mutate(
+    iso_a3 = case_when(
+      # France + territories
+      name == "France"                ~ "FRA",
+      name == "French Guiana"         ~ "GUF",
+      name == "Guadeloupe"            ~ "GLP",
+      name == "Martinique"            ~ "MTQ",
+      name == "Mayotte"               ~ "MYT",
+      name == "Reunion"               ~ "REU",
+
+      # Norway + territories
+      name == "Norway"                ~ "NOR",
+      name == "Svalbard and Jan Mayen"~ "SJM",
+
+      # Gibraltar, BES, Tokelau
+      name == "Gibraltar"             ~ "GIB",
+      name == "Caribbean Netherlands" ~ "BES",
+      name == "Tokelau"               ~ "TKL",
+
+      TRUE ~ iso_a3
+    )
+  ) %>%
+  select(iso_a3, name, geometry)
+
+# Add back the unions
+world_countries <- bind_rows(world_countries, somalia_union, cyprus_union)
+
+# Load admin-1 to get Kosovo polygon
+admin1 <- rnaturalearth::ne_states(returnclass = "sf")
+
+kosovo_poly <- admin1 %>%
+  filter(geonunit == "Kosovo") %>%
+  summarise(geometry = sf::st_union(geometry)) %>%
+  mutate(
+    iso_a3 = "XKX",
+    name   = "Kosovo"
+  ) %>%
+  select(iso_a3, name, geometry)
+
+# Final world object with Kosovo included
+world <- bind_rows(world_countries, kosovo_poly)
+```
+
+```{r merge-data, include=FALSE}
+map_df <- world %>%
+  left_join(df, by = c("iso_a3" = "Code")) %>%
+  filter(!is.na(geometry), !is.na(Year))
+```
+
+```{r geojson, include=FALSE}
+# Write world sf to a temporary GeoJSON and read it back as a list
+# Keeping the GeoJSON available lets plotly compute fit bounds cleanly
+# for the geo projection without repeated world copies.
+tmp_geojson <- tempfile(fileext = ".geojson")
+sf::st_write(world, tmp_geojson, driver = "GeoJSON", quiet = TRUE)
+world_geojson <- jsonlite::read_json(tmp_geojson, simplifyVector = FALSE)
+```
+
+```{r prepare-year-slider, include=FALSE}
+years_available <- sort(unique(map_df$Year))
+map_data <- map_df
+
+coverage_year <- df %>%
+  group_by(Year) %>%
+  summarise(count = sum(!is.na(life_expectancy)), .groups = "drop") %>%
+  filter(count == max(count)) %>%
+  summarise(selected = max(Year)) %>%
+  pull(selected)
+```
+
+```{r life-expectancy-map}
+get_year_data <- function(y) {
+  full <- world %>%
+    sf::st_drop_geometry() %>%
+    select(iso_a3, name)
+
+  year_values <- df %>%
+    filter(Year == y) %>%
+    select(Code, life_expectancy)
+
+  full %>%
+    left_join(year_values, by = c("iso_a3" = "Code")) %>%
+    rename(Entity = name, Code = iso_a3) %>%
+    mutate(Year = y)
+}
+
+selected_year <- coverage_year
+plot_df <- get_year_data(selected_year)
+
+map_frame_duration <- 650
+
+fig <- plot_ly(
+  data = plot_df,
+  type = "choropleth",
+  locations = ~Code,
+  z = ~life_expectancy,
+  locationmode = "ISO-3",
+  featureidkey = "properties.iso_a3",
+  text = ~Entity,
+  customdata = ~Year,
+  colorscale = list(
+    c(0.00, "#6E6365"),
+    c(0.33, "#9C847C"),
+    c(0.66, "#C7BF99"),
+    c(1.00, "#C1CF91")
+  ),
+  zmin = 40,
+  zmax = 85,
+  colorbar = list(
+    orientation = "h",
+    title = list(
+      text = "",
+      side = "bottom",
+      font = list(size = 16, color = "#1f2933", family = "Cormorant Garamond, serif")
+    ),
+    len = 0.90,
+    thickness = 10,
+    x = 0.5,
+    xanchor = "center",
+    y = -0.1,
+    tickcolor = "#1f2933",
+    tickfont = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 20),
+    bgcolor = "rgba(0,0,0,0)"
+  ),
+  marker = list(
+    line = list(
+      color = "#4F494A",   # Dark brown outline
+      width = 0.8          # Normal thickness
+    )
+  ),
+  hovertemplate = paste0(
+    "<b>%{text}</b><br>",
+    "Year: %{customdata}<br>",
+    "Life Expectancy: %{z:.1f}<extra></extra>"
+  )
+)
+
+map_frames <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+  list(
+    name = as.character(y),
+    locations = year_df$Code,
+    z = year_df$life_expectancy,
+    text = year_df$Entity,
+    customdata = year_df$Year
+  )
+})
+
+steps <- lapply(seq_along(years_available), function(i) {
+  y <- years_available[i]
+  year_df <- map_frames[[i]]
+  list(
+    label = y,
+    value = y,
+    method = "restyle",
+    args = list(
+      list(
+        locations = list(year_df$locations),
+        z = list(year_df$z),
+        text = list(year_df$text),
+        customdata = list(year_df$customdata)
+      )
+    )
+  )
+})
+
+active_index <- which(years_available == selected_year)
+slider_active <- if (length(active_index) == 0) length(years_available) - 1 else active_index - 1
+
+fig <- fig %>% layout(
+  title = list(
+    text = "<b>Life Expectancy by Country: Medieval to Current Time</b>",
+    x = 0.5,
+    xanchor = "center",
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 33,
+      color = "#1f2933"
+    )
+  ),
+  font = list(
+    family = "Cormorant Garamond, serif",
+    size = 16,
+    color = "#1f2933"
+  ),
+  hoverlabel = list(
+    bgcolor = "#D1BDA3",        # Hover background color
+    bordercolor = "#8C7B7F",    # Hover border color
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 16,
+      color = "#1f2933"         # Hover text color
+    ),
+    namelength = -1,
+    align = "left"
+  ),
+  geo = list(
+    projection = list(type = "natural earth"),
+    showframe = FALSE,
+    showcoastlines = FALSE,
+    showlakes = FALSE,
+    showcountries = FALSE,
+    landcolor = "#D1BDA3",
+    bgcolor = "rgba(0,0,0,0)",
+    showgrid = TRUE,
+    gridcolor = "#545151",
+    gridwidth = 0.3,
+    lataxis = list(
+      showgrid = TRUE,
+      gridcolor = "#545151",
+      gridwidth = 0.3,
+      range = c(-60, 85)
+    ),
+    lonaxis = list(
+      showgrid = TRUE,
+      gridcolor = "#545151",
+      gridwidth = 0.3,
+      range = c(-180, 180)
+    ),
+    fitbounds = "locations"
+  ),
+  annotations = list(
+    list(
+      text = "<b>Life Expectancy in Years</b>",
+      x = 0.5,
+      y = -0.11,
+      xref = "paper",
+      yref = "paper",
+      showarrow = FALSE,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 22,
+        color = "#1f2933"
+      )
+    ),
+    list(
+      text = "<b>Medieval</b>",
+      x = 0.10,
+      y = -0.33,
+      xref = "paper",
+      yref = "paper",
+      xanchor = "left",
+      showarrow = FALSE,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 21,
+        color = "#1f2933"
+      )
+    ),
+    list(
+      text = "<b>Current Time</b>",
+      x = 0.90,
+      y = -0.33,
+      xref = "paper",
+      yref = "paper",
+      xanchor = "right",
+      showarrow = FALSE,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 21,
+        color = "#1f2933"
+      )
+    )
+  ),
+  sliders = list(list(
+    active = slider_active,
+    currentvalue = list(
+      prefix = "<b>Calendar Year: </b>",
+      x = 0.5,
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 22,
+        color = "#1f2933"
+      )
+    ),
+    len = 0.90,
+    x = 0.05,
+    pad = list(t = 90),
+    steps = steps,
+    bgcolor = "#AB7148",
+    bordercolor = "#E6CFAE",
+    font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
+  )),
+  margin = list(
+    l = 20, r = 20, t = 80, b = 200
+  ),
+  width = 1300,
+  height = 700,
+  paper_bgcolor = "rgba(0,0,0,0)",
+  plot_bgcolor = "rgba(0,0,0,0)",
+  dragmode = "zoom"
+) %>%
+  config(scrollZoom = TRUE)
+
+fig$x$layout$sliders[[1]]$transition <- list(duration = 0)
+fig$x$layout$sliders[[1]]$y <- -0.08
+
+fig <- htmlwidgets::onRender(fig, data = list(
+  frames = map_frames,
+  years = years_available,
+  frameDuration = map_frame_duration
+),
+"function(el, x, data) {
+  const frames = data.frames || [];
+  const years = data.years || [];
+  const frameDuration = data.frameDuration || 600;
+  const playBtn = document.getElementById('map-play');
+  const pauseBtn = document.getElementById('map-pause');
+  const sliderContainer = el.querySelector('.slider-container');
+  if (sliderContainer) sliderContainer.style.display = 'block';
+
+  let timer = null;
+
+  function applyFrame(idx) {
+    if (idx < 0 || idx >= frames.length) return;
+    const f = frames[idx];
+    Plotly.restyle(el, {
+      locations: [f.locations],
+      z: [f.z],
+      text: [f.text],
+      customdata: [f.customdata]
+    }, [0]);
+    Plotly.relayout(el, {'sliders[0].active': idx, 'geo.fitbounds': false});
+  }
+
+  function stop() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function play() {
+    if (!frames.length) return;
+    stop();
+    let idx = 0;
+    applyFrame(idx);
+    timer = setInterval(() => {
+      idx = (idx + 1) % frames.length;
+      applyFrame(idx);
+    }, frameDuration);
+  }
+
+  el.on('plotly_sliderchange', evt => {
+    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
+    const idx = years.indexOf(val);
+    if (idx >= 0) {
+      stop();
+      applyFrame(idx);
+    }
+  });
+
+  if (playBtn) playBtn.addEventListener('click', play);
+  if (pauseBtn) pauseBtn.addEventListener('click', stop);
+}")
+
+htmltools::div(
+  class = "visual-section",
+  id = "map-wrapper",
+  tags$div(
+    class = "playback-controls",
+    tags$button(class = "playback-button", id = "map-play", "Play"),
+    tags$button(class = "playback-button", id = "map-pause", "Pause")
+  ),
+  fig
+)
+```
+
+```{r income-bar-chart}
+income_groups <- c(
+  "High-income countries",
+  "High-and-upper-middle-income countries",
+  "Upper-middle-income countries",
+  "No income group available",
+  "Middle-income countries",
+  "Low-and-middle-income countries",
+  "Lower-middle-income countries",
+  "Low-and-Lower-middle-income countries",
+  "Low-income countries"
+)
+
+income_df <- read_csv(
+  "/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv"
+) %>%
+  filter(Entity %in% income_groups, Year >= 1950) %>%
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  mutate(
+    Entity = factor(Entity, levels = rev(income_groups))
+  )
+
+get_income_year <- function(y) {
+  income_df %>%
+    filter(Year == y) %>%
+    arrange(life_expectancy)
+}
+
+income_years <- sort(unique(income_df$Year))
+selected_income_year <- max(income_years)
+bar_df <- get_income_year(selected_income_year)
+
+income_frame_duration <- 520
+
+fig_income <- plot_ly(
+  data = bar_df,
+  type = "bar",
+  orientation = "h",
+  x = ~life_expectancy,
+  y = ~Entity,
+  text = ~Entity,
+  textposition = "inside",
+  insidetextanchor = "right",
+  textfont = list(
+    family = "Cormorant Garamond, serif",
+    size = 18,
+    color = "#1f2933"
+  ),
+  marker = list(
+    color = ~life_expectancy,
+    colorscale = list(
+      c(0.00, "#6E6365"),
+      c(0.33, "#9C847C"),
+      c(0.66, "#C7BF99"),
+      c(1.00, "#C1CF91")
+    ),
+    line = list(color = "#4F494A", width = 1.2)
+  ),
+  customdata = ~Year,
+  hovertemplate = paste0(
+    "<b>%{y}</b><br>",
+    "Calendar Year: %{customdata}<br>",
+    "Life Expectancy: %{x:.1f} years<extra></extra>"
+  )
+)
+
+income_frames <- lapply(income_years, function(y) {
+  year_df <- get_income_year(y)
+  list(
+    name = as.character(y),
+    x = year_df$life_expectancy,
+    y = year_df$Entity,
+    text = year_df$Entity,
+    customdata = year_df$Year
+  )
+})
+
+income_steps <- lapply(seq_along(income_years), function(i) {
+  y <- income_years[i]
+  frame <- income_frames[[i]]
+  list(
+    label = y,
+    value = y,
+    method = "restyle",
+    args = list(
+      list(
+        x = list(frame$x),
+        y = list(frame$y),
+        text = list(frame$text),
+        customdata = list(frame$customdata)
+      )
+    )
+  )
+})
+
+fig_income <- fig_income %>%
+  layout(
+    title = list(
+      text = "<b>Life Expectancy by Income Group (1950–2023)</b>",
+      x = 0.5,
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 33,
+        color = "#1f2933"
+      )
+    ),
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 18,
+      color = "#1f2933"
+    ),
+    yaxis = list(
+      title = "",
+      showticklabels = FALSE
+    ),
+    xaxis = list(
+      title = list(
+        text = "<b>Life Expectancy in Years</b>",
+        standoff = 8,
+        font = list(
+          family = "Cormorant Garamond, serif",
+          size = 20,
+          color = "#1f2933"
+        )
+      ),
+      range = c(20, 85),
+      zeroline = FALSE,
+      showgrid = TRUE,
+      gridcolor = "#545151",
+      gridwidth = 0.3
+    ),
+    hoverlabel = list(
+      bgcolor = "#D1BDA3",
+      bordercolor = "#8C7B7F",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 16,
+        color = "#1f2933"
+      )
+    ),
+    sliders = list(list(
+      active = length(income_years) - 1,
+      currentvalue = list(
+        prefix = "<b>Calendar Year: </b>",
+        x = 0.5,
+        xanchor = "center",
+        font = list(
+          family = "Cormorant Garamond, serif",
+          size = 22,
+          color = "#1f2933"
+        )
+      ),
+      len = 0.99,
+      x = -0.01,
+      pad = list(t = 80),
+      steps = income_steps,
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE",
+      font = list(
+        color = "#1f2933",
+        family = "Cormorant Garamond, serif",
+        size = 20
+      )
+    )),
+    margin = list(
+      l = 80, r = 40, t = 80, b = 140
+    ),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
+  )
+
+fig_income$x$layout$sliders[[1]]$transition <- list(duration = 0)
+fig_income$x$layout$sliders[[1]]$y <- -0.08
+
+fig_income <- htmlwidgets::onRender(fig_income, data = list(
+  frames = income_frames,
+  years = income_years,
+  frameDuration = income_frame_duration
+),
+"function(el, x, data) {
+  const frames = data.frames || [];
+  const years = data.years || [];
+  const frameDuration = data.frameDuration || 500;
+  const playBtn = document.getElementById('income-play');
+  const pauseBtn = document.getElementById('income-pause');
+  const sliderContainer = el.querySelector('.slider-container');
+  if (sliderContainer) sliderContainer.style.display = 'block';
+
+  let timer = null;
+
+  function applyFrame(idx) {
+    if (idx < 0 || idx >= frames.length) return;
+    const f = frames[idx];
+    Plotly.restyle(el, {
+      x: [f.x],
+      y: [f.y],
+      text: [f.text],
+      customdata: [f.customdata]
+    }, [0]);
+    Plotly.relayout(el, {'sliders[0].active': idx});
+  }
+
+  function stop() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function play() {
+    if (!frames.length) return;
+    stop();
+    let idx = 0;
+    applyFrame(idx);
+    timer = setInterval(() => {
+      idx = (idx + 1) % frames.length;
+      applyFrame(idx);
+    }, frameDuration);
+  }
+
+  el.on('plotly_sliderchange', evt => {
+    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
+    const idx = years.indexOf(val);
+    if (idx >= 0) {
+      stop();
+      applyFrame(idx);
+    }
+  });
+
+  if (playBtn) playBtn.addEventListener('click', play);
+  if (pauseBtn) pauseBtn.addEventListener('click', stop);
+}")
+
+htmltools::div(
+  class = "visual-section",
+  tags$div(
+    class = "playback-controls",
+    tags$button(class = "playback-button", id = "income-play", "Play"),
+    tags$button(class = "playback-button", id = "income-pause", "Pause")
+  ),
+  fig_income
+)
+```
+
+```{r continent-line-chart}
+continents <- c("Oceania", "Europe", "Asia", "Africa")
+
+continent_df <- read_csv(
+  "/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv"
+) %>%
+  filter(Entity %in% continents, Year >= 1770) %>%
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  mutate(
+    Entity = factor(Entity, levels = continents)
+  )
+
+continent_years <- sort(unique(continent_df$Year))
+
+get_continent_paths <- function(y) {
+  df_year <- continent_df %>% filter(Year <= y)
+  lapply(continents, function(ct) {
+    tmp <- df_year %>% filter(Entity == ct)
+    list(
+      x = tmp$Year,
+      y = tmp$life_expectancy
+    )
+  })
+}
+
+selected_cont_year <- max(continent_years)
+paths_now <- get_continent_paths(selected_cont_year)
+
+continent_colors <- c("#ADDBE0", "#BD6262", "#E8DC90", "#C1CF91")
+
+fig_cont <- plot_ly()
+
+for (i in seq_along(continents)) {
+  fig_cont <- fig_cont %>%
+    add_lines(
+      x = paths_now[[i]]$x,
+      y = paths_now[[i]]$y,
+      name = continents[i],
+      line = list(
+        width = 3,
+        color = continent_colors[i]
+      ),
+      hovertemplate = paste0(
+        "<b>", continents[i], "</b><br>",
+        "Year: %{x}<br>",
+        "Life Expectancy: %{y:.1f} years<extra></extra>"
+      )
+    )
+}
+
+continent_frame_duration <- 420
+
+continent_frames <- lapply(continent_years, function(y) {
+  paths <- get_continent_paths(y)
+  list(
+    name = as.character(y),
+    traces = seq_along(paths) - 1,
+    data = paths
+  )
+})
+
+continent_steps <- lapply(seq_along(continent_years), function(i) {
+  y <- continent_years[i]
+  frame <- continent_frames[[i]]
+  list(
+    label = y,
+    value = y,
+    method = "restyle",
+    args = list(
+      list(
+        x = lapply(frame$data, function(p) p$x),
+        y = lapply(frame$data, function(p) p$y)
+      )
+    )
+  )
+})
+
+fig_cont <- fig_cont %>%
+  layout(
+    title = list(
+      text = "<b>Life Expectancy over Time by Continent (1770–2023)</b>",
+      x = 0.5,
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 33,
+        color = "#1f2933"
+      )
+    ),
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 18,
+      color = "#1f2933"
+    ),
+    xaxis = list(
+      title = " ",
+      range = c(min(continent_years), max(continent_years)),
+      showgrid = TRUE,
+      gridcolor = "#545151",
+      gridwidth = 0.3
+    ),
+    yaxis = list(
+      title = "<b>Life Expectancy in Years</b>",
+      range = c(24, 85),
+      showgrid = TRUE,
+      gridcolor = "#545151",
+      gridwidth = 0.3
+    ),
+    hoverlabel = list(
+      bgcolor = "#D1BDA3",
+      bordercolor = "#8C7B7F",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      )
+    ),
+    sliders = list(list(
+      active = length(continent_years) - 1,
+      currentvalue = list(
+        prefix = "<b>Calendar Year: </b>",
+        x = 0.5,
+        xanchor = "center",
+        font = list(
+          family = "Cormorant Garamond, serif",
+          size = 20,
+          color = "#1f2933"
+        )
+      ),
+      len = 0.99,
+      x = 0.01,
+      pad = list(t = 60),
+      steps = continent_steps,
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE",
+      font = list(
+        color = "#1f2933",
+        family = "Cormorant Garamond, serif",
+        size = 18
+      )
+    )),
+    margin = list(
+      l = 80, r = 40, t = 80, b = 140
+    ),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
+  )
+
+fig_cont$x$layout$sliders[[1]]$transition <- list(duration = 0)
+fig_cont$x$layout$sliders[[1]]$y <- -0.08
+
+fig_cont <- htmlwidgets::onRender(fig_cont, data = list(
+  frames = continent_frames,
+  years = continent_years,
+  frameDuration = continent_frame_duration
+),
+"function(el, x, data) {
+  const frames = data.frames || [];
+  const years = data.years || [];
+  const frameDuration = data.frameDuration || 400;
+  const playBtn = document.getElementById('continent-play');
+  const pauseBtn = document.getElementById('continent-pause');
+  const sliderContainer = el.querySelector('.slider-container');
+  if (sliderContainer) sliderContainer.style.display = 'block';
+
+  let timer = null;
+
+  function applyFrame(idx) {
+    if (idx < 0 || idx >= frames.length) return;
+    const f = frames[idx];
+    Plotly.restyle(el, {
+      x: f.data.map(p => p.x),
+      y: f.data.map(p => p.y)
+    }, f.traces);
+    Plotly.relayout(el, {'sliders[0].active': idx});
+  }
+
+  function stop() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function play() {
+    if (!frames.length) return;
+    stop();
+    let idx = 0;
+    applyFrame(idx);
+    timer = setInterval(() => {
+      idx = (idx + 1) % frames.length;
+      applyFrame(idx);
+    }, frameDuration);
+  }
+
+  el.on('plotly_sliderchange', evt => {
+    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
+    const idx = years.indexOf(val);
+    if (idx >= 0) {
+      stop();
+      applyFrame(idx);
+    }
+  });
+
+  if (playBtn) playBtn.addEventListener('click', play);
+  if (pauseBtn) pauseBtn.addEventListener('click', stop);
+}")
+
+htmltools::div(
+  class = "visual-section",
+  tags$div(
+    class = "playback-controls",
+    tags$button(class = "playback-button", id = "continent-play", "Play"),
+    tags$button(class = "playback-button", id = "continent-pause", "Pause")
+  ),
+  fig_cont
+)
+```
