@@ -1,6 +1,5 @@
 Differences between test_best_visual.Rmd and best_visual.Rmd
 -----------------------------------------------------------
-- Added CSS hooks for external playback buttons (unused now) while keeping original fonts, background, and layout intact.
-- Introduced Plotly-native Play/Pause controls (updatemenus) for each visual so sliders and buttons work together without custom JavaScript.
-- Switched all three visuals to frame-based animation; sliders now call method = "animate" and figures carry plotly frames directly.
-- Kept the choropleth geometry fixed per baseline while frames update only life expectancy/customdata values; playback runs faster (160 ms frames).
+- Switched animation control to OWID-style state management for all three visuals (map, income bars, continent lines) using Plotly.restyle/react-style updates with custom Play/Pause intervals instead of Plotly frames.
+- Added embedded JSON payloads and htmlwidgets::onRender handlers in test_best_visual.Rmd (map, income-bar-chart, continent-line-chart sections) to drive slider and button interactions.
+- Playback speed constants live in each section: map_speed_ms (≈140 ms), income_speed_ms (≈260 ms), continent_speed_ms (≈320 ms).
