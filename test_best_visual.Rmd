@@ -272,13 +272,61 @@ fig <- plot_ly(
   )
 )
 
+map_frames <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+
+  list(
+    name = as.character(y),
+    data = list(
+      list(
+        z = year_df$life_expectancy,
+        customdata = year_df$Year
+      )
+    )
+  )
+})
+
+fig$x$frames <- map_frames
+
+map_frame_opts <- list(
+  frame = list(duration = 125, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
 map_steps <- lapply(years_available, function(y) {
   list(
     label = y,
-    method = "skip",
-    args = list()
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      map_frame_opts
+    )
   )
 })
+
+map_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      c(map_frame_opts, list(fromcurrent = FALSE))
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        mode = "immediate",
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0)
+      )
+    )
+  )
+)
 
 map_buttons <- list(
   list(
@@ -419,8 +467,8 @@ fig <- fig %>% layout(
     x = 0.05,
     pad = list(t = 99),
     steps = map_steps,
-    bgcolor = "#AB7148",
-    bordercolor = "#E6CFAE",
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE",
     font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
   )),
   updatemenus = list(list(
@@ -428,7 +476,7 @@ fig <- fig %>% layout(
     showactive = FALSE,
     direction = "right",
     x = 0.05,
-    y = -0.08,
+    y = -0.22,
     xanchor = "left",
     yanchor = "top",
     pad = list(t = 40),
@@ -604,13 +652,62 @@ fig_income <- plot_ly(
   )
 )
 
+income_frames <- lapply(income_years, function(y) {
+  year_df <- get_income_year(y)
+  list(
+    name = as.character(y),
+    data = list(
+      list(
+        x = year_df$life_expectancy,
+        y = year_df$Entity,
+        text = year_df$Entity,
+        customdata = year_df$Year
+      )
+    )
+  )
+})
+
+fig_income$x$frames <- income_frames
+
+income_frame_opts <- list(
+  frame = list(duration = 250, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
 income_steps <- lapply(income_years, function(y) {
   list(
     label = y,
-    method = "skip",
-    args = list()
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      income_frame_opts
+    )
   )
 })
+
+income_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      c(income_frame_opts, list(fromcurrent = FALSE))
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        mode = "immediate",
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0)
+      )
+    )
+  )
+)
 
 income_buttons <- list(
   list(
@@ -713,7 +810,7 @@ fig_income <- fig_income %>%
       showactive = FALSE,
       direction = "right",
       x = 0.01,
-      y = -0.08,
+      y = -0.12,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
@@ -802,13 +899,55 @@ for (i in seq_along(continents)) {
     )
 }
 
+continent_frames <- lapply(continent_years, function(y) {
+  paths <- get_continent_paths(y)
+  list(
+    name = as.character(y),
+    data = lapply(paths, function(p) list(x = p$x, y = p$y))
+  )
+})
+
+fig_cont$x$frames <- continent_frames
+
+continent_frame_opts <- list(
+  frame = list(duration = 250, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
 continent_steps <- lapply(continent_years, function(y) {
   list(
     label = y,
-    method = "skip",
-    args = list()
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      continent_frame_opts
+    )
   )
 })
+
+continent_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      c(continent_frame_opts, list(fromcurrent = FALSE))
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        mode = "immediate",
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0)
+      )
+    )
+  )
+)
 
 continent_buttons <- list(
   list(
@@ -900,7 +1039,7 @@ fig_cont <- fig_cont %>%
       showactive = FALSE,
       direction = "right",
       x = 0.01,
-      y = -0.08,
+      y = -0.10,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
