@@ -294,7 +294,7 @@ map_frame_opts <- list(
 
 map_steps <- lapply(years_available, function(y) {
   list(
-    label = y,
+    label = as.character(y),
     method = "animate",
     args = list(
       list(as.character(y)),
@@ -594,7 +594,7 @@ income_frame_opts <- list(
 
 income_steps <- lapply(income_years, function(y) {
   list(
-    label = y,
+    label = as.character(y),
     method = "animate",
     args = list(
       list(as.character(y)),
@@ -810,7 +810,7 @@ continent_frame_opts <- list(
 
 continent_steps <- lapply(continent_years, function(y) {
   list(
-    label = y,
+    label = as.character(y),
     method = "animate",
     args = list(
       list(as.character(y)),
