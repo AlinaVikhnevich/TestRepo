@@ -280,7 +280,7 @@ map_steps <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
 
   list(
-     label = y,
+    label = y,
     method = "restyle",
     args = list(
       list(
@@ -360,9 +360,7 @@ fig <- fig %>% layout(
       gridcolor = "#545151",
       gridwidth = 0.3,
       range = c(-180, 180)
-    ),
-
-    fitbounds = "locations"
+    )
   ),
   annotations = list(
     list(
@@ -648,13 +646,13 @@ income_frame_opts <- list(
   speed_ms = income_speed_ms
 )
 
-  income_payload <- list(
+income_payload <- list(
   years = income_years,
   values = income_year_values,
   selected_year = selected_income_year,
   speed_ms = income_speed_ms
 )
-  
+
 income_steps <- lapply(income_years, function(y) {
   list(
     label = as.character(y),
