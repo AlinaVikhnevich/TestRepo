@@ -217,8 +217,10 @@ get_year_data <- function(y) {
 map_year_values <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
   list(
+    locations = year_df$Code,
     z = year_df$life_expectancy,
-    customdata = rep(y, nrow(year_df))
+    text = year_df$Entity,
+    customdata = year_df$Year
   )
 })
 
@@ -272,64 +274,28 @@ fig <- plot_ly(
   )
 )
 
-map_frames <- lapply(seq_along(years_available), function(i) {
-  list(
-    name = as.character(years_available[i]),
-    data = list(
-      list(
-        z = map_year_values[[i]]$z,
-        customdata = map_year_values[[i]]$customdata
-      )
-    )
-  )
-})
-fig$x$frames <- map_frames
-
-# Animation speed constants (ms per frame)
 map_speed_ms <- 140
-map_frame_opts <- list(
-  frame = list(duration = map_speed_ms, redraw = FALSE),
-  transition = list(duration = 0),
-  mode = "immediate"
-)
 
 map_steps <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+
   list(
-    label = as.character(y),
-    method = "animate",
+     label = y,
+    method = "restyle",
     args = list(
-      list(as.character(y)),
-      map_frame_opts
+      list(
+        locations  = list(year_df$Code),
+        z          = list(year_df$life_expectancy),
+        text       = list(year_df$Entity),
+        customdata = list(year_df$Year)
+      )
     )
   )
 })
 
 map_buttons <- list(
-  list(
-    label = "Play",
-    method = "animate",
-    args = list(
-      NULL,
-      list(
-        frame = list(duration = map_speed_ms, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate",
-        fromcurrent = FALSE
-      )
-    )
-  ),
-  list(
-    label = "Pause",
-    method = "animate",
-    args = list(
-      NULL,
-      list(
-        frame = list(duration = 0, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate"
-      )
-    )
-  )
+  list(label = "Play", method = "relayout", args = list(list())),
+  list(label = "Pause", method = "relayout", args = list(list()))
 )
 
 active_index <- which(years_available == selected_year)
@@ -339,8 +305,7 @@ map_payload <- list(
   years = years_available,
   values = map_year_values,
   selected_year = selected_year,
-  speed_ms = map_speed_ms,
-  locations = map_locations$iso_a3
+  speed_ms = map_speed_ms
 )
 
 fig <- fig %>% layout(
@@ -455,8 +420,9 @@ fig <- fig %>% layout(
       )
     ),
     len = 0.90,
-    x = 0.05,
-    pad = list(t = 99),
+    x = 0.12,
+    y = -0.26,
+    pad = list(t = 30),
     steps = map_steps,
     bgcolor = "#AB7148",
     bordercolor = "#E6CFAE",
@@ -466,11 +432,11 @@ fig <- fig %>% layout(
     type = "buttons",
     showactive = FALSE,
     direction = "right",
-    x = 0.5,
-    y = -0.08,
-    xanchor = "center",
+    x = 0.02,
+    y = -0.26,
+    xanchor = "left",
     yanchor = "top",
-    pad = list(t = 10),
+    pad = list(t = 30),
     buttons = map_buttons,
     font = list(
       family = "Cormorant Garamond, serif",
@@ -504,7 +470,16 @@ map_js <- sprintf(
     const setYear = (idx) => {
       if (idx < 0 || idx >= years.length) return;
       const entry = values[idx];
-      Plotly.restyle(el, { z: [entry.z], customdata: [entry.customdata] }, [0]);
+      Plotly.restyle(
+        el,
+        {
+          locations: [entry.locations],
+          z: [entry.z],
+          text: [entry.text],
+          customdata: [entry.customdata]
+        },
+        [0]
+      );
       Plotly.relayout(el, { 'sliders[0].active': idx });
     };
 
@@ -666,7 +641,20 @@ income_frame_opts <- list(
   transition = list(duration = 0),
   mode = "immediate"
 )
+  income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
 
+  income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+  
 income_steps <- lapply(income_years, function(y) {
   list(
     label = as.character(y),
@@ -770,8 +758,9 @@ fig_income <- fig_income %>%
         )
       ),
       len = 0.99,
-      x = -0.01,
-      pad = list(t = 80),
+      x = 0.12,
+      y = -0.25,
+      pad = list(t = 30),
       steps = income_steps,
       bgcolor = "#AB7148",
       bordercolor = "#E6CFAE",
@@ -785,11 +774,11 @@ fig_income <- fig_income %>%
       type = "buttons",
       showactive = FALSE,
       direction = "right",
-      x = 0.5,
-      y = -0.08,
-      xanchor = "center",
+      x = 0.02,
+      y = -0.25,
+      xanchor = "left",
       yanchor = "top",
-      pad = list(t = 10),
+      pad = list(t = 30),
       buttons = income_buttons,
       font = list(
         family = "Cormorant Garamond, serif",
@@ -891,6 +880,13 @@ continent_frame_opts <- list(
   mode = "immediate"
 )
 
+continent_payload <- list(
+  years = continent_years,
+  paths = continent_year_values,
+  selected_year = selected_cont_year,
+  speed_ms = continent_speed_ms
+)
+
 continent_steps <- lapply(continent_years, function(y) {
   list(
     label = as.character(y),
@@ -983,8 +979,9 @@ fig_cont <- fig_cont %>%
         )
       ),
       len = 0.99,
-      x = 0.01,
-      pad = list(t = 60),
+      x = 0.12,
+      y = -0.25,
+      pad = list(t = 30),
       steps = continent_steps,
       bgcolor = "#AB7148",
       bordercolor = "#E6CFAE",
@@ -998,11 +995,11 @@ fig_cont <- fig_cont %>%
       type = "buttons",
       showactive = FALSE,
       direction = "right",
-      x = 0.5,
-      y = -0.08,
-      xanchor = "center",
+      x = 0.02,
+      y = -0.25,
+      xanchor = "left",
       yanchor = "top",
-      pad = list(t = 10),
+      pad = list(t = 30),
       buttons = continent_buttons,
       font = list(
         family = "Cormorant Garamond, serif",
