@@ -229,10 +229,10 @@ plot_df <- get_year_data(selected_year)
 
 fig <- plot_ly(
   data = plot_df,
-  type = "choropleth",
+  type = "choroplethmapbox",
+  geojson = world_geojson,
   locations = ~Code,
   z = ~life_expectancy,
-  locationmode = "ISO-3",
   featureidkey = "properties.iso_a3",
   text = ~Entity,
   customdata = ~Year,
@@ -335,32 +335,10 @@ fig <- fig %>% layout(
     namelength = -1,
     align = "left"
   ),
-  geo = list(
-    projection = list(type = "natural earth"),
-    showframe = FALSE,
-    showcoastlines = FALSE,
-    showlakes = FALSE,
-    showcountries = FALSE,
-    landcolor = "#D1BDA3",
-    bgcolor = "rgba(0,0,0,0)",
-
-    # GRIDLINES (parallels + meridians)
-    showgrid = TRUE,
-    gridcolor = "#545151",
-    gridwidth = 0.3,
-
-    lataxis = list(
-      showgrid = TRUE,
-      gridcolor = "#545151",
-      gridwidth = 0.3,
-      range = c(-60, 85)
-    ),
-    lonaxis = list(
-      showgrid = TRUE,
-      gridcolor = "#545151",
-      gridwidth = 0.3,
-      range = c(-180, 180)
-    )
+  mapbox = list(
+    style = "open-street-map",
+    zoom = 1.1,
+    center = list(lon = 10, lat = 15)
   ),
   annotations = list(
     list(
@@ -640,6 +618,13 @@ income_frame_opts <- list(
   mode = "immediate"
 )
   income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
   years = income_years,
   values = income_year_values,
   selected_year = selected_income_year,
