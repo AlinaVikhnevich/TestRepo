@@ -89,8 +89,8 @@ library(dplyr)
 ```
 
 ```{r import-data, include=FALSE}
-df <- read_csv("/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv")
-metadata <- fromJSON("/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.metadata.json")
+df <- read_csv("life-expectancy.csv")
+metadata <- fromJSON("life-expectancy.metadata.json")
 
 df <- df %>%
   mutate(
@@ -198,20 +198,29 @@ coverage_year <- df %>%
 ```
 
 ```{r life-expectancy-map}
-get_year_data <- function(y) {
-  full <- world %>%
-    sf::st_drop_geometry() %>%
-    select(iso_a3, name)
+map_locations <- world %>%
+  sf::st_drop_geometry() %>%
+  select(iso_a3, name) %>%
+  arrange(iso_a3)
 
+get_year_data <- function(y) {
   year_values <- df %>%
     filter(Year == y) %>%
     select(Code, life_expectancy)
 
-  full %>%
+  map_locations %>%
     left_join(year_values, by = c("iso_a3" = "Code")) %>%
     rename(Entity = name, Code = iso_a3) %>%
     mutate(Year = y)
 }
+
+map_year_values <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+  list(
+    z = year_df$life_expectancy,
+    customdata = rep(y, nrow(year_df))
+  )
+})
 
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
@@ -250,34 +259,78 @@ fig <- plot_ly(
     bgcolor = "rgba(0,0,0,0)"
   ),
   marker = list(
-  line = list(
-    color = "#4F494A",   # Dark brown outline
-    width = 0.8          # Normal thickness
-  )
-),
+    line = list(
+      color = "#4F494A",   # Dark brown outline
+      width = 0.8          # Normal thickness
+    )
+  ),
   hovertemplate = paste0(
     "<b>%{text}</b><br>",
     "Year: %{customdata}<br>",
     "Life Expectancy: %{z:.1f}<extra></extra>"
-    
+
   )
 )
 
-steps <- lapply(years_available, function(y) {
-  year_df <- get_year_data(y)
-
+map_frames <- lapply(seq_along(years_available), function(i) {
   list(
-    label = y,
-    method = "restyle",
-    args = list(
+    name = as.character(years_available[i]),
+    data = list(
       list(
-        locations = list(year_df$Code),
-        z         = list(year_df$life_expectancy),
-        customdata = list(year_df$Year)
+        z = map_year_values[[i]]$z,
+        customdata = map_year_values[[i]]$customdata
       )
     )
   )
 })
+fig$x$frames <- map_frames
+
+# Animation speed constants (ms per frame)
+map_speed_ms <- 140
+map_frame_opts <- list(
+  frame = list(duration = map_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
+map_steps <- lapply(years_available, function(y) {
+  list(
+    label = as.character(y),
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      map_frame_opts
+    )
+  )
+})
+
+map_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = map_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
 
 active_index <- which(years_available == selected_year)
 slider_active <- if (length(active_index) == 0) length(years_available) - 1 else active_index - 1
@@ -299,16 +352,16 @@ fig <- fig %>% layout(
     color = "#1f2933"
   ),
   hoverlabel = list(
-  bgcolor = "#D1BDA3",        # Hover background color
-  bordercolor = "#8C7B7F",    # Hover border color
-  font = list(
-    family = "Cormorant Garamond, serif",
-    size = 16,
-    color = "#1f2933"         # Hover text color
+    bgcolor = "#D1BDA3",        # Hover background color
+    bordercolor = "#8C7B7F",    # Hover border color
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 16,
+      color = "#1f2933"         # Hover text color
+    ),
+    namelength = -1,
+    align = "left"
   ),
-  namelength = -1,
-  align = "left"
-),
   geo = list(
     projection = list(type = "natural earth"),
     showframe = FALSE,
@@ -384,22 +437,40 @@ fig <- fig %>% layout(
   sliders = list(list(
     active = slider_active,
     currentvalue = list(
-    prefix = "<b>Calendar Year: </b>",
-    x = 0.5,               # Centers the label
-    xanchor = "center",
-    font = list(
-      family = "Cormorant Garamond, serif",
-      size = 22,           # Larger text
-      color = "#1f2933"
-  )
-),
+      prefix = "<b>Calendar Year: </b>",
+      x = 0.5,               # Centers the label
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 22,           # Larger text
+        color = "#1f2933"
+      )
+    ),
     len = 0.90,
     x = 0.05,
     pad = list(t = 99),
-    steps = steps,
-      bgcolor = "#AB7148",
-      bordercolor = "#E6CFAE",
+    steps = map_steps,
+    bgcolor = "#AB7148",
+    bordercolor = "#E6CFAE",
     font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
+  )),
+  updatemenus = list(list(
+    type = "buttons",
+    showactive = FALSE,
+    direction = "right",
+    x = 0.5,
+    y = -0.08,
+    xanchor = "center",
+    yanchor = "top",
+    pad = list(t = 10),
+    buttons = map_buttons,
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 18,
+      color = "#1f2933"
+    ),
+    bgcolor = "#AB7148",
+    bordercolor = "#E6CFAE"
   )),
   margin = list(
     l = 20, r = 20, t = 80, b = 200
@@ -433,7 +504,7 @@ income_groups <- c(
 )
 
 income_df <- read_csv(
-  "/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv"
+  "life-expectancy.csv"
 ) %>%
   filter(Entity %in% income_groups, Year >= 1950) %>%
   rename(life_expectancy = `Period life expectancy at birth`) %>%
@@ -450,6 +521,16 @@ get_income_year <- function(y) {
 income_years <- sort(unique(income_df$Year))
 selected_income_year <- max(income_years)
 bar_df <- get_income_year(selected_income_year)
+
+income_year_values <- lapply(income_years, function(y) {
+  df_y <- get_income_year(y)
+  list(
+    x = df_y$life_expectancy,
+    y = df_y$Entity,
+    text = df_y$Entity,
+    customdata = df_y$Year
+  )
+})
 
 fig_income <- plot_ly(
   data = bar_df,
@@ -489,21 +570,68 @@ fig_income <- plot_ly(
   )
 )
 
-income_steps <- lapply(income_years, function(y) {
-  year_df <- get_income_year(y)
+income_frames <- lapply(income_years, function(y) {
+  df_y <- get_income_year(y)
   list(
-    label = y,
-    method = "restyle",
-    args = list(
+    name = as.character(y),
+    data = list(
       list(
-        x = list(year_df$life_expectancy),
-        y = list(year_df$Entity),
-        text = list(year_df$Entity),
-        customdata = list(year_df$Year)
+        x = df_y$life_expectancy,
+        y = df_y$Entity,
+        text = df_y$Entity,
+        customdata = df_y$Year
       )
     )
   )
 })
+fig_income$x$frames <- income_frames
+
+# Animation speed constant (ms per frame)
+income_speed_ms <- 260
+income_frame_opts <- list(
+  frame = list(duration = income_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
+income_steps <- lapply(income_years, function(y) {
+  list(
+    label = as.character(y),
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      income_frame_opts
+    )
+  )
+})
+
+income_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = income_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
 
 fig_income <- fig_income %>%
   layout(
@@ -580,6 +708,24 @@ fig_income <- fig_income %>%
         size = 20
       )
     )),
+    updatemenus = list(list(
+      type = "buttons",
+      showactive = FALSE,
+      direction = "right",
+      x = 0.5,
+      y = -0.08,
+      xanchor = "center",
+      yanchor = "top",
+      pad = list(t = 10),
+      buttons = income_buttons,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      ),
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE"
+    )),
 
     margin = list(
       l = 80, r = 40, t = 80, b = 140
@@ -599,7 +745,7 @@ htmltools::div(
 continents <- c("Oceania", "Europe", "Asia", "Africa")
 
 continent_df <- read_csv(
-  "/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv"
+  "life-expectancy.csv"
 ) %>%
   filter(Entity %in% continents, Year >= 1770) %>%
   rename(life_expectancy = `Period life expectancy at birth`) %>%
@@ -623,6 +769,10 @@ get_continent_paths <- function(y) {
 selected_cont_year <- max(continent_years)
 paths_now <- get_continent_paths(selected_cont_year)
 
+continent_year_values <- lapply(continent_years, function(y) {
+  get_continent_paths(y)
+})
+
 continent_colors <- c("#ADDBE0", "#BD6262", "#E8DC90", "#C1CF91")
 
 fig_cont <- plot_ly()
@@ -645,19 +795,60 @@ for (i in seq_along(continents)) {
     )
 }
 
-continent_steps <- lapply(continent_years, function(y) {
-  paths <- get_continent_paths(y)
+continent_frames <- lapply(seq_along(continent_years), function(i) {
   list(
-    label = y,
-    method = "restyle",
+    name = as.character(continent_years[i]),
+    data = lapply(continent_year_values[[i]], function(p) list(x = p$x, y = p$y))
+  )
+})
+fig_cont$x$frames <- continent_frames
+
+# Animation speed constant (ms per frame)
+continent_speed_ms <- 320
+continent_frame_opts <- list(
+  frame = list(duration = continent_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
+continent_steps <- lapply(continent_years, function(y) {
+  list(
+    label = as.character(y),
+    method = "animate",
     args = list(
-      list(
-        x = lapply(paths, function(p) p$x),
-        y = lapply(paths, function(p) p$y)
-      )
+      list(as.character(y)),
+      continent_frame_opts
     )
   )
 })
+
+continent_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = continent_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
 
 fig_cont <- fig_cont %>%
   layout(
@@ -722,6 +913,24 @@ fig_cont <- fig_cont %>%
         family = "Cormorant Garamond, serif",
         size = 18
       )
+    )),
+    updatemenus = list(list(
+      type = "buttons",
+      showactive = FALSE,
+      direction = "right",
+      x = 0.5,
+      y = -0.08,
+      xanchor = "center",
+      yanchor = "top",
+      pad = list(t = 10),
+      buttons = continent_buttons,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      ),
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE"
     )),
     margin = list(
       l = 80, r = 40, t = 80, b = 140
