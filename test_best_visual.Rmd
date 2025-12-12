@@ -227,52 +227,76 @@ map_year_values <- lapply(years_available, function(y) {
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
 
-fig <- plot_ly(
-  data = plot_df,
-  type = "choropleth",
-  geojson = world_geojson,
-  locations = ~Code,
-  z = ~life_expectancy,
-  featureidkey = "properties.iso_a3",
-  text = ~Entity,
-  customdata = ~Year,
-  colorscale = list(
-    c(0.00, "#6E6365"),
-    c(0.33, "#9C847C"),
-    c(0.66, "#C7BF99"),
-    c(1.00, "#C1CF91")
-  ),
-  zmin = 40,
-  zmax = 85,
-  colorbar = list(
-    orientation = "h",
-    title = list(
-      text = "",
-      side = "bottom",
-      font = list(size = 16, color = "#1f2933", family = "Cormorant Garamond, serif")
-    ),
-    len = 0.90,
-    thickness = 10,
-    x = 0.5,
-    xanchor = "center",
-    y = -0.1,
-    tickcolor = "#1f2933",
-    tickfont = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 20),
-    bgcolor = "rgba(0,0,0,0)"
-  ),
-  marker = list(
-    line = list(
-      color = "#4F494A",   # Dark brown outline
-      width = 0.8          # Normal thickness
-    )
-  ),
-  hovertemplate = paste0(
-    "<b>%{text}</b><br>",
-    "Year: %{customdata}<br>",
-    "Life Expectancy: %{z:.1f}<extra></extra>"
+fig <- plot_ly()
 
+# Static outline trace so country borders stay visible even when a year has no data
+fig <- fig %>%
+  add_trace(
+    type = "choropleth",
+    geojson = world_geojson,
+    locations = map_locations$iso_a3,
+    z = rep(0, nrow(map_locations)),
+    featureidkey = "properties.iso_a3",
+    colorscale = list(
+      c(0, "rgba(0,0,0,0)"),
+      c(1, "rgba(0,0,0,0)")
+    ),
+    showscale = FALSE,
+    marker = list(
+      line = list(color = "#4F494A", width = 0.8)
+    ),
+    hoverinfo = "skip"
   )
-)
+
+# Data trace that is restyled during playback
+fig <- fig %>%
+  add_trace(
+    data = plot_df,
+    type = "choropleth",
+    geojson = world_geojson,
+    locations = ~Code,
+    z = ~life_expectancy,
+    locationmode = "ISO-3",
+    featureidkey = "properties.iso_a3",
+    text = ~Entity,
+    customdata = ~Year,
+    colorscale = list(
+      c(0.00, "#6E6365"),
+      c(0.33, "#9C847C"),
+      c(0.66, "#C7BF99"),
+      c(1.00, "#C1CF91")
+    ),
+    zmin = 40,
+    zmax = 85,
+    colorbar = list(
+      orientation = "h",
+      title = list(
+        text = "",
+        side = "bottom",
+        font = list(size = 16, color = "#1f2933", family = "Cormorant Garamond, serif")
+      ),
+      len = 0.90,
+      thickness = 10,
+      x = 0.5,
+      xanchor = "center",
+      y = -0.1,
+      tickcolor = "#1f2933",
+      tickfont = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 20),
+      bgcolor = "rgba(0,0,0,0)"
+    ),
+    marker = list(
+      line = list(
+        color = "#4F494A",   # Dark brown outline
+        width = 0.8          # Normal thickness
+      )
+    ),
+    hovertemplate = paste0(
+      "<b>%{text}</b><br>",
+      "Year: %{customdata}<br>",
+      "Life Expectancy: %{z:.1f}<extra></extra>"
+
+    )
+  )
 
 map_speed_ms <- 140
 
@@ -288,7 +312,8 @@ map_steps <- lapply(years_available, function(y) {
         z          = list(year_df$life_expectancy),
         text       = list(year_df$Entity),
         customdata = list(year_df$Year)
-      )
+      ),
+      list(1)
     )
   )
 })
@@ -473,7 +498,7 @@ map_js <- sprintf(
           text: [entry.text],
           customdata: [entry.customdata]
         },
-        [0]
+        [1]
       );
       Plotly.relayout(el, { 'sliders[0].active': idx });
     };
@@ -637,6 +662,13 @@ income_frame_opts <- list(
   mode = "immediate"
 )
   income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
   years = income_years,
   values = income_year_values,
   selected_year = selected_income_year,
