@@ -302,12 +302,7 @@ map_buttons <- list(
     method = "animate",
     args = list(
       NULL,
-      list(
-        frame = list(duration = 125, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate",
-        fromcurrent = FALSE
-      )
+      c(map_frame_opts, list(fromcurrent = FALSE))
     )
   ),
   list(
@@ -316,9 +311,9 @@ map_buttons <- list(
     args = list(
       NULL,
       list(
+        mode = "immediate",
         frame = list(duration = 0, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate"
+        transition = list(duration = 0)
       )
     )
   )
@@ -451,7 +446,7 @@ fig <- fig %>% layout(
     showactive = FALSE,
     direction = "right",
     x = 0.05,
-    y = -0.08,
+    y = -0.22,
     xanchor = "left",
     yanchor = "top",
     pad = list(t = 40),
@@ -592,12 +587,7 @@ income_buttons <- list(
     method = "animate",
     args = list(
       NULL,
-      list(
-        frame = list(duration = 250, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate",
-        fromcurrent = FALSE
-      )
+      c(income_frame_opts, list(fromcurrent = FALSE))
     )
   ),
   list(
@@ -606,9 +596,9 @@ income_buttons <- list(
     args = list(
       NULL,
       list(
+        mode = "immediate",
         frame = list(duration = 0, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate"
+        transition = list(duration = 0)
       )
     )
   )
@@ -694,7 +684,7 @@ fig_income <- fig_income %>%
       showactive = FALSE,
       direction = "right",
       x = 0.01,
-      y = -0.08,
+      y = -0.12,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
@@ -805,12 +795,7 @@ continent_buttons <- list(
     method = "animate",
     args = list(
       NULL,
-      list(
-        frame = list(duration = 250, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate",
-        fromcurrent = FALSE
-      )
+      c(continent_frame_opts, list(fromcurrent = FALSE))
     )
   ),
   list(
@@ -819,9 +804,9 @@ continent_buttons <- list(
     args = list(
       NULL,
       list(
+        mode = "immediate",
         frame = list(duration = 0, redraw = FALSE),
-        transition = list(duration = 0),
-        mode = "immediate"
+        transition = list(duration = 0)
       )
     )
   )
@@ -896,7 +881,7 @@ fig_cont <- fig_cont %>%
       showactive = FALSE,
       direction = "right",
       x = 0.01,
-      y = -0.08,
+      y = -0.10,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
