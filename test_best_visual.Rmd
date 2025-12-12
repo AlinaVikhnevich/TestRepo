@@ -69,41 +69,6 @@ h4.author, h4.date {
   display: flex;
   justify-content: center;
 }
-
-/* Playback controls styling */
-.playback-controls {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin: 10px 0 4px;
-}
-
-.slider-container {
-  display: block !important;
-}
-
-.playback-button {
-  font-family: "Cormorant Garamond", serif;
-  font-size: 18px;
-  background-color: rgba(171, 113, 72, 0.85);
-  color: #1f2933;
-  border: 1px solid #E6CFAE;
-  padding: 6px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.playback-button:hover {
-  background-color: rgba(171, 113, 72, 0.95);
-  transform: translateY(-1px);
-}
-
-.playback-button:active {
-  transform: translateY(0);
-}
 ```
 
 ```{r setup, include=FALSE}
@@ -211,7 +176,7 @@ map_df <- world %>%
   filter(!is.na(geometry), !is.na(Year))
 ```
 
-```{r geojson, include=FALSE}
+```{r geojson}
 # Write world sf to a temporary GeoJSON and read it back as a list
 # Keeping the GeoJSON available lets plotly compute fit bounds cleanly
 # for the geo projection without repeated world copies.
@@ -233,34 +198,23 @@ coverage_year <- df %>%
 ```
 
 ```{r life-expectancy-map}
-map_base <- world %>%
-  sf::st_drop_geometry() %>%
-  select(iso_a3, name)
-
 get_year_data <- function(y) {
-  full <- map_base
+  full <- world %>%
+    sf::st_drop_geometry() %>%
+    select(iso_a3, name)
 
   year_values <- df %>%
     filter(Year == y) %>%
     select(Code, life_expectancy)
 
-get_year_data <- function(y) {
-  map_base %>%
-    left_join(
-      df %>%
-        filter(Year == y) %>%
-        select(Code, life_expectancy),
-      by = c("iso_a3" = "Code")
-    ) %>%
+  full %>%
+    left_join(year_values, by = c("iso_a3" = "Code")) %>%
     rename(Entity = name, Code = iso_a3) %>%
     mutate(Year = y)
 }
 
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
-
-map_locations <- map_base %>% pull(iso_a3)
-map_text <- map_base %>% pull(name)
 
 fig <- plot_ly(
   data = plot_df,
@@ -296,43 +250,30 @@ fig <- plot_ly(
     bgcolor = "rgba(0,0,0,0)"
   ),
   marker = list(
-    line = list(
-      color = "#4F494A",   # Dark brown outline
-      width = 0.8          # Normal thickness
-    )
-  ),
+  line = list(
+    color = "#4F494A",   # Dark brown outline
+    width = 0.8          # Normal thickness
+  )
+),
   hovertemplate = paste0(
     "<b>%{text}</b><br>",
     "Year: %{customdata}<br>",
     "Life Expectancy: %{z:.1f}<extra></extra>"
+    
   )
 )
 
-map_frame_duration <- 100
-map_frame_duration <- 650
-map_locations <- plot_df$Code
-map_text <- plot_df$Entity
-
-map_frames <- lapply(years_available, function(y) {
+steps <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
-  list(
-    name = as.character(y),
-    z = year_df$life_expectancy,
-    customdata = year_df$Year
-  )
-})
 
-steps <- lapply(seq_along(years_available), function(i) {
-  year_frame <- map_frames[[i]]
   list(
-    label = years_available[i],
-    value = years_available[i],
+    label = y,
     method = "restyle",
     args = list(
-      list(as.character(y)),
       list(
-        z = list(year_frame$z),
-        customdata = list(year_frame$customdata)
+        locations = list(year_df$Code),
+        z         = list(year_df$life_expectancy),
+        customdata = list(year_df$Year)
       )
     )
   )
@@ -358,16 +299,16 @@ fig <- fig %>% layout(
     color = "#1f2933"
   ),
   hoverlabel = list(
-    bgcolor = "#D1BDA3",        # Hover background color
-    bordercolor = "#8C7B7F",    # Hover border color
-    font = list(
-      family = "Cormorant Garamond, serif",
-      size = 16,
-      color = "#1f2933"         # Hover text color
-    ),
-    namelength = -1,
-    align = "left"
+  bgcolor = "#D1BDA3",        # Hover background color
+  bordercolor = "#8C7B7F",    # Hover border color
+  font = list(
+    family = "Cormorant Garamond, serif",
+    size = 16,
+    color = "#1f2933"         # Hover text color
   ),
+  namelength = -1,
+  align = "left"
+),
   geo = list(
     projection = list(type = "natural earth"),
     showframe = FALSE,
@@ -376,9 +317,12 @@ fig <- fig %>% layout(
     showcountries = FALSE,
     landcolor = "#D1BDA3",
     bgcolor = "rgba(0,0,0,0)",
+
+    # GRIDLINES (parallels + meridians)
     showgrid = TRUE,
     gridcolor = "#545151",
     gridwidth = 0.3,
+
     lataxis = list(
       showgrid = TRUE,
       gridcolor = "#545151",
@@ -391,6 +335,7 @@ fig <- fig %>% layout(
       gridwidth = 0.3,
       range = c(-180, 180)
     ),
+
     fitbounds = "locations"
   ),
   annotations = list(
@@ -439,21 +384,21 @@ fig <- fig %>% layout(
   sliders = list(list(
     active = slider_active,
     currentvalue = list(
-      prefix = "<b>Calendar Year: </b>",
-      x = 0.5,
-      xanchor = "center",
-      font = list(
-        family = "Cormorant Garamond, serif",
-        size = 22,
-        color = "#1f2933"
-      )
-    ),
+    prefix = "<b>Calendar Year: </b>",
+    x = 0.5,               # Centers the label
+    xanchor = "center",
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 22,           # Larger text
+      color = "#1f2933"
+  )
+),
     len = 0.90,
     x = 0.05,
     pad = list(t = 99),
     steps = steps,
-    bgcolor = "#AB7148",
-    bordercolor = "#E6CFAE",
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE",
     font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
   )),
   margin = list(
@@ -466,71 +411,6 @@ fig <- fig %>% layout(
   dragmode = "zoom"
 ) %>%
   config(scrollZoom = TRUE)
-fig$x$layout$sliders[[1]]$transition <- list(duration = 0)
-
-fig <- htmlwidgets::onRender(fig, data = list(
-  frames = map_frames,
-  years = years_available,
-  frameDuration = map_frame_duration,
-  locations = map_locations,
-  text = map_text
-),
-"function(el, x, data) {
-  const frames = data.frames || [];
-  const years = data.years || [];
-  const frameDuration = data.frameDuration || 160;
-  const frameDuration = data.frameDuration || 600;
-  const locations = data.locations || [];
-  const text = data.text || [];
-  const playBtn = document.getElementById('map-play');
-  const pauseBtn = document.getElementById('map-pause');
-  const sliderContainer = el.querySelector('.slider-container');
-  if (sliderContainer) sliderContainer.style.display = 'block';
-
-  let timer = null;
-
-  function applyFrame(idx) {
-    if (idx < 0 || idx >= frames.length) return;
-    const f = frames[idx];
-    Plotly.restyle(el, {
-      locations: [locations],
-      text: [text],
-      z: [f.z],
-      customdata: [f.customdata]
-    }, [0]);
-    Plotly.relayout(el, {'sliders[0].active': idx, 'geo.fitbounds': false});
-  }
-
-  function stop() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function play() {
-    if (!frames.length) return;
-    stop();
-    let idx = 0;
-    applyFrame(idx);
-    timer = setInterval(() => {
-      idx = (idx + 1) % frames.length;
-      applyFrame(idx);
-    }, frameDuration);
-  }
-
-  el.on('plotly_sliderchange', evt => {
-    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
-    const idx = years.indexOf(val);
-    if (idx >= 0) {
-      stop();
-      applyFrame(idx);
-    }
-  });
-
-  if (playBtn) playBtn.addEventListener('click', play);
-  if (pauseBtn) pauseBtn.addEventListener('click', stop);
-}")
 
 htmltools::div(
   class = "visual-section",
@@ -571,14 +451,15 @@ income_years <- sort(unique(income_df$Year))
 selected_income_year <- max(income_years)
 bar_df <- get_income_year(selected_income_year)
 
-income_frame_duration <- 520
-
 fig_income <- plot_ly(
   data = bar_df,
   type = "bar",
   orientation = "h",
+
   x = ~life_expectancy,
   y = ~Entity,
+
+  # INSIDE BAR LABELS (income groups)
   text = ~Entity,
   textposition = "inside",
   insidetextanchor = "right",
@@ -587,6 +468,8 @@ fig_income <- plot_ly(
     size = 18,
     color = "#1f2933"
   ),
+
+  # HORIZONTAL GRADIENT BAR
   marker = list(
     color = ~life_expectancy,
     colorscale = list(
@@ -597,6 +480,7 @@ fig_income <- plot_ly(
     ),
     line = list(color = "#4F494A", width = 1.2)
   ),
+
   customdata = ~Year,
   hovertemplate = paste0(
     "<b>%{y}</b><br>",
@@ -605,29 +489,17 @@ fig_income <- plot_ly(
   )
 )
 
-income_frames <- lapply(income_years, function(y) {
+income_steps <- lapply(income_years, function(y) {
   year_df <- get_income_year(y)
   list(
-    name = as.character(y),
-    data = list(list(
-      x = year_df$life_expectancy,
-      y = year_df$Entity,
-      text = year_df$Entity,
-      customdata = year_df$Year
-    ))
-  )
-})
-
-income_steps <- lapply(income_years, function(y) {
-  list(
     label = y,
-    method = "animate",
+    method = "restyle",
     args = list(
-      list(as.character(y)),
       list(
-        mode = "immediate",
-        frame = list(duration = income_frame_duration, redraw = FALSE),
-        transition = list(duration = 0)
+        x = list(year_df$life_expectancy),
+        y = list(year_df$Entity),
+        text = list(year_df$Entity),
+        customdata = list(year_df$Year)
       )
     )
   )
@@ -650,10 +522,13 @@ fig_income <- fig_income %>%
       size = 18,
       color = "#1f2933"
     ),
+
+    # REMOVE LEFT-SIDE LABELS COMPLETELY
     yaxis = list(
       title = "",
       showticklabels = FALSE
     ),
+
     xaxis = list(
       title = list(
         text = "<b>Life Expectancy in Years</b>",
@@ -670,6 +545,7 @@ fig_income <- fig_income %>%
       gridcolor = "#545151",
       gridwidth = 0.3
     ),
+
     hoverlabel = list(
       bgcolor = "#D1BDA3",
       bordercolor = "#8C7B7F",
@@ -679,6 +555,7 @@ fig_income <- fig_income %>%
         color = "#1f2933"
       )
     ),
+
     sliders = list(list(
       active = length(income_years) - 1,
       currentvalue = list(
@@ -703,75 +580,14 @@ fig_income <- fig_income %>%
         size = 20
       )
     )),
+
     margin = list(
       l = 80, r = 40, t = 80, b = 140
     ),
+
     paper_bgcolor = "rgba(0,0,0,0)",
     plot_bgcolor = "rgba(0,0,0,0)"
   )
-
-fig_income$x$frames <- income_frames
-
-fig_income$x$layout$sliders[[1]]$transition <- list(duration = 0)
-
-fig_income <- htmlwidgets::onRender(fig_income, data = list(
-  frames = income_frames,
-  years = income_years,
-  frameDuration = income_frame_duration
-),
-"function(el, x, data) {
-  const frames = data.frames || [];
-  const years = data.years || [];
-  const frameDuration = data.frameDuration || 500;
-  const playBtn = document.getElementById('income-play');
-  const pauseBtn = document.getElementById('income-pause');
-  const sliderContainer = el.querySelector('.slider-container');
-  if (sliderContainer) sliderContainer.style.display = 'block';
-
-  let timer = null;
-
-  function applyFrame(idx) {
-    if (idx < 0 || idx >= frames.length) return;
-    const f = frames[idx];
-    Plotly.restyle(el, {
-      x: [f.x],
-      y: [f.y],
-      text: [f.text],
-      customdata: [f.customdata]
-    }, [0]);
-    Plotly.relayout(el, {'sliders[0].active': idx});
-  }
-
-  function stop() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function play() {
-    if (!frames.length) return;
-    stop();
-    let idx = 0;
-    applyFrame(idx);
-    timer = setInterval(() => {
-      idx = (idx + 1) % frames.length;
-      applyFrame(idx);
-    }, frameDuration);
-  }
-
-  el.on('plotly_sliderchange', evt => {
-    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
-    const idx = years.indexOf(val);
-    if (idx >= 0) {
-      stop();
-      applyFrame(idx);
-    }
-  });
-
-  if (playBtn) playBtn.addEventListener('click', play);
-  if (pauseBtn) pauseBtn.addEventListener('click', stop);
-}")
 
 htmltools::div(
   class = "visual-section",
@@ -829,26 +645,15 @@ for (i in seq_along(continents)) {
     )
 }
 
-continent_frame_duration <- 420
-
-continent_frames <- lapply(continent_years, function(y) {
+continent_steps <- lapply(continent_years, function(y) {
   paths <- get_continent_paths(y)
   list(
-    name = as.character(y),
-    data = lapply(paths, function(p) list(x = p$x, y = p$y))
-  )
-})
-
-continent_steps <- lapply(continent_years, function(y) {
-  list(
     label = y,
-    method = "animate",
+    method = "restyle",
     args = list(
-      list(as.character(y)),
       list(
-        mode = "immediate",
-        frame = list(duration = continent_frame_duration, redraw = FALSE),
-        transition = list(duration = 0)
+        x = lapply(paths, function(p) p$x),
+        y = lapply(paths, function(p) p$y)
       )
     )
   )
@@ -924,67 +729,6 @@ fig_cont <- fig_cont %>%
     paper_bgcolor = "rgba(0,0,0,0)",
     plot_bgcolor = "rgba(0,0,0,0)"
   )
-
-fig_cont$x$frames <- continent_frames
-
-fig_cont$x$layout$sliders[[1]]$transition <- list(duration = 0)
-
-fig_cont <- htmlwidgets::onRender(fig_cont, data = list(
-  frames = continent_frames,
-  years = continent_years,
-  frameDuration = continent_frame_duration
-),
-"function(el, x, data) {
-  const frames = data.frames || [];
-  const years = data.years || [];
-  const frameDuration = data.frameDuration || 400;
-  const playBtn = document.getElementById('continent-play');
-  const pauseBtn = document.getElementById('continent-pause');
-  const sliderContainer = el.querySelector('.slider-container');
-  if (sliderContainer) sliderContainer.style.display = 'block';
-
-  let timer = null;
-
-  function applyFrame(idx) {
-    if (idx < 0 || idx >= frames.length) return;
-    const f = frames[idx];
-    Plotly.restyle(el, {
-      x: f.data.map(p => p.x),
-      y: f.data.map(p => p.y)
-    }, f.traces);
-    Plotly.relayout(el, {'sliders[0].active': idx});
-  }
-
-  function stop() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function play() {
-    if (!frames.length) return;
-    stop();
-    let idx = 0;
-    applyFrame(idx);
-    timer = setInterval(() => {
-      idx = (idx + 1) % frames.length;
-      applyFrame(idx);
-    }, frameDuration);
-  }
-
-  el.on('plotly_sliderchange', evt => {
-    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
-    const idx = years.indexOf(val);
-    if (idx >= 0) {
-      stop();
-      applyFrame(idx);
-    }
-  });
-
-  if (playBtn) playBtn.addEventListener('click', play);
-  if (pauseBtn) pauseBtn.addEventListener('click', stop);
-}")
 
 htmltools::div(
   class = "visual-section",
