@@ -1,5 +1,9 @@
 Differences between test_best_visual.Rmd and best_visual.Rmd
 -----------------------------------------------------------
+- Restored frame-driven Plotly animations for the map, income bar chart, and continent line chart while keeping the styling from best_visual.Rmd.
+- Each visual now defines frames, animate-driven slider steps, and Play/Pause updatemenus with durations tailored per chart (~140 ms map, ~260 ms income bars, ~320 ms continent lines).
+- Removed the previous onRender JavaScript timers; interactivity relies solely on Plotly frames and built-in animation controls.
+- Play/Pause button menus remain centered above each slider, matching the intended layout.
 - Switched animation control to OWID-style state management for all three visuals (map, income bars, continent lines) using Plotly.restyle/react-style updates with custom Play/Pause intervals instead of Plotly frames.
 - Added embedded JSON payloads and htmlwidgets::onRender handlers in test_best_visual.Rmd (map, income-bar-chart, continent-line-chart sections) to drive slider and button interactions.
 - Playback speed constants live in each section: map_speed_ms (≈140 ms), income_speed_ms (≈260 ms), continent_speed_ms (≈320 ms).

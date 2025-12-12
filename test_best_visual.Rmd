@@ -272,10 +272,30 @@ fig <- plot_ly(
   )
 )
 
+map_frames <- lapply(seq_along(years_available), function(i) {
+  list(
+    name = as.character(years_available[i]),
+    data = list(
+      list(
+        z = map_year_values[[i]]$z,
+        customdata = map_year_values[[i]]$customdata
+      )
+    )
+  )
+})
+fig$x$frames <- map_frames
+
+map_speed_ms <- 140
+map_frame_opts <- list(
+  frame = list(duration = map_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
 map_steps <- lapply(years_available, function(y) {
 map_frames <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
 
+map_steps <- lapply(years_available, function(y) {
   list(
     name = as.character(y),
     data = list(
@@ -314,6 +334,12 @@ map_buttons <- list(
     method = "animate",
     args = list(
       NULL,
+      list(
+        frame = list(duration = map_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
       c(map_frame_opts, list(fromcurrent = FALSE))
     )
   ),
@@ -323,6 +349,13 @@ map_buttons <- list(
     args = list(
       NULL,
       list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
         mode = "immediate",
         frame = list(duration = 0, redraw = FALSE),
         transition = list(duration = 0)
@@ -675,6 +708,29 @@ fig_income <- plot_ly(
   )
 )
 
+income_frames <- lapply(income_years, function(y) {
+  df_y <- get_income_year(y)
+  list(
+    name = as.character(y),
+    data = list(
+      list(
+        x = df_y$life_expectancy,
+        y = df_y$Entity,
+        text = df_y$Entity,
+        customdata = df_y$Year
+      )
+    )
+  )
+})
+fig_income$x$frames <- income_frames
+
+income_speed_ms <- 260
+income_frame_opts <- list(
+  frame = list(duration = income_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
 income_steps <- lapply(income_years, function(y) {
 income_frames <- lapply(income_years, function(y) {
   year_df <- get_income_year(y)
@@ -716,6 +772,29 @@ income_buttons <- list(
   list(
     label = "Play",
     method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = income_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
     args = list(
       NULL,
       c(income_frame_opts, list(fromcurrent = FALSE))
@@ -951,6 +1030,21 @@ for (i in seq_along(continents)) {
     )
 }
 
+continent_frames <- lapply(seq_along(continent_years), function(i) {
+  list(
+    name = as.character(continent_years[i]),
+    data = lapply(continent_year_values[[i]], function(p) list(x = p$x, y = p$y))
+  )
+})
+fig_cont$x$frames <- continent_frames
+
+continent_speed_ms <- 320
+continent_frame_opts <- list(
+  frame = list(duration = continent_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
 continent_steps <- lapply(continent_years, function(y) {
 continent_frames <- lapply(continent_years, function(y) {
   paths <- get_continent_paths(y)
@@ -985,6 +1079,29 @@ continent_buttons <- list(
   list(
     label = "Play",
     method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = continent_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
     args = list(
       NULL,
       c(continent_frame_opts, list(fromcurrent = FALSE))
