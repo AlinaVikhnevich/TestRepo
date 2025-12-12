@@ -244,8 +244,14 @@ get_year_data <- function(y) {
     filter(Year == y) %>%
     select(Code, life_expectancy)
 
-  full %>%
-    left_join(year_values, by = c("iso_a3" = "Code")) %>%
+get_year_data <- function(y) {
+  map_base %>%
+    left_join(
+      df %>%
+        filter(Year == y) %>%
+        select(Code, life_expectancy),
+      by = c("iso_a3" = "Code")
+    ) %>%
     rename(Entity = name, Code = iso_a3) %>%
     mutate(Year = y)
 }
