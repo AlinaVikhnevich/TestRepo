@@ -89,8 +89,8 @@ library(dplyr)
 ```
 
 ```{r import-data, include=FALSE}
-df <- read_csv("/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv")
-metadata <- fromJSON("/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.metadata.json")
+df <- read_csv("life-expectancy.csv")
+metadata <- fromJSON("life-expectancy.metadata.json")
 
 df <- df %>%
   mutate(
@@ -198,20 +198,29 @@ coverage_year <- df %>%
 ```
 
 ```{r life-expectancy-map}
-get_year_data <- function(y) {
-  full <- world %>%
-    sf::st_drop_geometry() %>%
-    select(iso_a3, name)
+map_locations <- world %>%
+  sf::st_drop_geometry() %>%
+  select(iso_a3, name) %>%
+  arrange(iso_a3)
 
+get_year_data <- function(y) {
   year_values <- df %>%
     filter(Year == y) %>%
     select(Code, life_expectancy)
 
-  full %>%
+  map_locations %>%
     left_join(year_values, by = c("iso_a3" = "Code")) %>%
     rename(Entity = name, Code = iso_a3) %>%
     mutate(Year = y)
 }
+
+map_year_values <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+  list(
+    z = year_df$life_expectancy,
+    customdata = rep(y, nrow(year_df))
+  )
+})
 
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
@@ -250,37 +259,50 @@ fig <- plot_ly(
     bgcolor = "rgba(0,0,0,0)"
   ),
   marker = list(
-  line = list(
-    color = "#4F494A",   # Dark brown outline
-    width = 0.8          # Normal thickness
-  )
-),
+    line = list(
+      color = "#4F494A",   # Dark brown outline
+      width = 0.8          # Normal thickness
+    )
+  ),
   hovertemplate = paste0(
     "<b>%{text}</b><br>",
     "Year: %{customdata}<br>",
     "Life Expectancy: %{z:.1f}<extra></extra>"
-    
+
   )
 )
 
-steps <- lapply(years_available, function(y) {
-  year_df <- get_year_data(y)
-
+map_steps <- lapply(years_available, function(y) {
   list(
     label = y,
-    method = "restyle",
-    args = list(
-      list(
-        locations = list(year_df$Code),
-        z         = list(year_df$life_expectancy),
-        customdata = list(year_df$Year)
-      )
-    )
+    method = "skip",
+    args = list()
   )
 })
 
+map_buttons <- list(
+  list(
+    label = "Play",
+    method = "skip",
+    args = list()
+  ),
+  list(
+    label = "Pause",
+    method = "skip",
+    args = list()
+  )
+)
+
 active_index <- which(years_available == selected_year)
 slider_active <- if (length(active_index) == 0) length(years_available) - 1 else active_index - 1
+map_speed_ms <- 140
+map_payload <- list(
+  years = years_available,
+  values = map_year_values,
+  selected_year = selected_year,
+  speed_ms = map_speed_ms,
+  locations = map_locations$iso_a3
+)
 
 fig <- fig %>% layout(
   title = list(
@@ -299,16 +321,16 @@ fig <- fig %>% layout(
     color = "#1f2933"
   ),
   hoverlabel = list(
-  bgcolor = "#D1BDA3",        # Hover background color
-  bordercolor = "#8C7B7F",    # Hover border color
-  font = list(
-    family = "Cormorant Garamond, serif",
-    size = 16,
-    color = "#1f2933"         # Hover text color
+    bgcolor = "#D1BDA3",        # Hover background color
+    bordercolor = "#8C7B7F",    # Hover border color
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 16,
+      color = "#1f2933"         # Hover text color
+    ),
+    namelength = -1,
+    align = "left"
   ),
-  namelength = -1,
-  align = "left"
-),
   geo = list(
     projection = list(type = "natural earth"),
     showframe = FALSE,
@@ -384,22 +406,40 @@ fig <- fig %>% layout(
   sliders = list(list(
     active = slider_active,
     currentvalue = list(
-    prefix = "<b>Calendar Year: </b>",
-    x = 0.5,               # Centers the label
-    xanchor = "center",
-    font = list(
-      family = "Cormorant Garamond, serif",
-      size = 22,           # Larger text
-      color = "#1f2933"
-  )
-),
+      prefix = "<b>Calendar Year: </b>",
+      x = 0.5,               # Centers the label
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 22,           # Larger text
+        color = "#1f2933"
+      )
+    ),
     len = 0.90,
     x = 0.05,
     pad = list(t = 99),
-    steps = steps,
-      bgcolor = "#AB7148",
-      bordercolor = "#E6CFAE",
+    steps = map_steps,
+    bgcolor = "#AB7148",
+    bordercolor = "#E6CFAE",
     font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
+  )),
+  updatemenus = list(list(
+    type = "buttons",
+    showactive = FALSE,
+    direction = "right",
+    x = 0.5,
+    y = -0.08,
+    xanchor = "center",
+    yanchor = "top",
+    pad = list(t = 10),
+    buttons = map_buttons,
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 18,
+      color = "#1f2933"
+    ),
+    bgcolor = "#AB7148",
+    bordercolor = "#E6CFAE"
   )),
   margin = list(
     l = 20, r = 20, t = 80, b = 200
@@ -411,6 +451,71 @@ fig <- fig %>% layout(
   dragmode = "zoom"
 ) %>%
   config(scrollZoom = TRUE)
+
+map_js <- sprintf(
+  "function(el, x) {
+    const payload = %s;
+    const years = payload.years;
+    const values = payload.values;
+    const speed = payload.speed_ms;
+    let timer = null;
+
+    const findIndex = (stepLabel) => years.findIndex((y) => String(y) === String(stepLabel));
+
+    const setYear = (idx) => {
+      if (idx < 0 || idx >= years.length) return;
+      const entry = values[idx];
+      Plotly.restyle(el, { z: [entry.z], customdata: [entry.customdata] }, [0]);
+      Plotly.relayout(el, { 'sliders[0].active': idx });
+    };
+
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const play = () => {
+      stop();
+      let idx = 0;
+      setYear(idx);
+      timer = setInterval(() => {
+        idx += 1;
+        if (idx >= years.length) {
+          stop();
+          return;
+        }
+        setYear(idx);
+      }, speed);
+    };
+
+    const startIndex = findIndex(payload.selected_year);
+    if (startIndex >= 0) {
+      setYear(startIndex);
+    }
+
+    el.on('plotly_sliderchange', (e) => {
+      stop();
+      const idx = findIndex(e.step.label);
+      if (idx >= 0) {
+        setYear(idx);
+      }
+    });
+
+    el.on('plotly_buttonclicked', (e) => {
+      const label = e?.button?.label;
+      if (label === 'Play') {
+        play();
+      } else if (label === 'Pause') {
+        stop();
+      }
+    });
+  }",
+  jsonlite::toJSON(map_payload, auto_unbox = TRUE)
+)
+
+fig <- htmlwidgets::onRender(fig, map_js)
 
 htmltools::div(
   class = "visual-section",
@@ -433,7 +538,7 @@ income_groups <- c(
 )
 
 income_df <- read_csv(
-  "/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv"
+  "life-expectancy.csv"
 ) %>%
   filter(Entity %in% income_groups, Year >= 1950) %>%
   rename(life_expectancy = `Period life expectancy at birth`) %>%
@@ -450,6 +555,16 @@ get_income_year <- function(y) {
 income_years <- sort(unique(income_df$Year))
 selected_income_year <- max(income_years)
 bar_df <- get_income_year(selected_income_year)
+
+income_year_values <- lapply(income_years, function(y) {
+  df_y <- get_income_year(y)
+  list(
+    x = df_y$life_expectancy,
+    y = df_y$Entity,
+    text = df_y$Entity,
+    customdata = df_y$Year
+  )
+})
 
 fig_income <- plot_ly(
   data = bar_df,
@@ -490,20 +605,33 @@ fig_income <- plot_ly(
 )
 
 income_steps <- lapply(income_years, function(y) {
-  year_df <- get_income_year(y)
   list(
     label = y,
-    method = "restyle",
-    args = list(
-      list(
-        x = list(year_df$life_expectancy),
-        y = list(year_df$Entity),
-        text = list(year_df$Entity),
-        customdata = list(year_df$Year)
-      )
-    )
+    method = "skip",
+    args = list()
   )
 })
+
+income_buttons <- list(
+  list(
+    label = "Play",
+    method = "skip",
+    args = list()
+  ),
+  list(
+    label = "Pause",
+    method = "skip",
+    args = list()
+  )
+)
+
+income_speed_ms <- 260
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
 
 fig_income <- fig_income %>%
   layout(
@@ -580,6 +708,24 @@ fig_income <- fig_income %>%
         size = 20
       )
     )),
+    updatemenus = list(list(
+      type = "buttons",
+      showactive = FALSE,
+      direction = "right",
+      x = 0.5,
+      y = -0.08,
+      xanchor = "center",
+      yanchor = "top",
+      pad = list(t = 10),
+      buttons = income_buttons,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      ),
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE"
+    )),
 
     margin = list(
       l = 80, r = 40, t = 80, b = 140
@@ -588,6 +734,13 @@ fig_income <- fig_income %>%
     paper_bgcolor = "rgba(0,0,0,0)",
     plot_bgcolor = "rgba(0,0,0,0)"
   )
+
+income_js <- sprintf(
+  "function(el, x) {\n    const payload = %s;\n    const years = payload.years;\n    const values = payload.values;\n    const speed = payload.speed_ms;\n    let timer = null;\n\n    const findIndex = (label) => years.findIndex((y) => String(y) === String(label));\n\n    const setYear = (idx) => {\n      if (idx < 0 || idx >= years.length) return;\n      const entry = values[idx];\n      Plotly.restyle(el, { x: [entry.x], y: [entry.y], text: [entry.text], customdata: [entry.customdata] }, [0]);\n      Plotly.relayout(el, { 'sliders[0].active': idx });\n    };\n\n    const stop = () => {\n      if (timer) {\n        clearInterval(timer);\n        timer = null;\n      }\n    };\n\n    const play = () => {\n      stop();\n      let idx = 0;\n      setYear(idx);\n      timer = setInterval(() => {\n        idx += 1;\n        if (idx >= years.length) {\n          stop();\n          return;\n        }\n        setYear(idx);\n      }, speed);\n    };\n\n    const startIndex = findIndex(payload.selected_year);\n    if (startIndex >= 0) {\n      setYear(startIndex);\n    }\n\n    el.on('plotly_sliderchange', (e) => {\n      stop();\n      const idx = findIndex(e.step.label);\n      if (idx >= 0) {\n        setYear(idx);\n      }\n    });\n\n    el.on('plotly_buttonclicked', (e) => {\n      const label = e?.button?.label;\n      if (label === 'Play') {\n        play();\n      } else if (label === 'Pause') {\n        stop();\n      }\n    });\n  }",
+  jsonlite::toJSON(income_payload, auto_unbox = TRUE)
+)
+
+fig_income <- htmlwidgets::onRender(fig_income, income_js)
 
 htmltools::div(
   class = "visual-section",
@@ -599,7 +752,7 @@ htmltools::div(
 continents <- c("Oceania", "Europe", "Asia", "Africa")
 
 continent_df <- read_csv(
-  "/Users/alina_vikhnevich/Desktop/Fall 2025/DATA 608/DATA608Projects/life-expectancy.csv"
+  "life-expectancy.csv"
 ) %>%
   filter(Entity %in% continents, Year >= 1770) %>%
   rename(life_expectancy = `Period life expectancy at birth`) %>%
@@ -622,6 +775,10 @@ get_continent_paths <- function(y) {
 
 selected_cont_year <- max(continent_years)
 paths_now <- get_continent_paths(selected_cont_year)
+
+continent_year_values <- lapply(continent_years, function(y) {
+  get_continent_paths(y)
+})
 
 continent_colors <- c("#ADDBE0", "#BD6262", "#E8DC90", "#C1CF91")
 
@@ -646,18 +803,33 @@ for (i in seq_along(continents)) {
 }
 
 continent_steps <- lapply(continent_years, function(y) {
-  paths <- get_continent_paths(y)
   list(
     label = y,
-    method = "restyle",
-    args = list(
-      list(
-        x = lapply(paths, function(p) p$x),
-        y = lapply(paths, function(p) p$y)
-      )
-    )
+    method = "skip",
+    args = list()
   )
 })
+
+continent_buttons <- list(
+  list(
+    label = "Play",
+    method = "skip",
+    args = list()
+  ),
+  list(
+    label = "Pause",
+    method = "skip",
+    args = list()
+  )
+)
+
+continent_speed_ms <- 320
+continent_payload <- list(
+  years = continent_years,
+  paths = continent_year_values,
+  selected_year = selected_cont_year,
+  speed_ms = continent_speed_ms
+)
 
 fig_cont <- fig_cont %>%
   layout(
@@ -723,12 +895,37 @@ fig_cont <- fig_cont %>%
         size = 18
       )
     )),
+    updatemenus = list(list(
+      type = "buttons",
+      showactive = FALSE,
+      direction = "right",
+      x = 0.5,
+      y = -0.08,
+      xanchor = "center",
+      yanchor = "top",
+      pad = list(t = 10),
+      buttons = continent_buttons,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      ),
+      bgcolor = "#AB7148",
+      bordercolor = "#E6CFAE"
+    )),
     margin = list(
       l = 80, r = 40, t = 80, b = 140
     ),
     paper_bgcolor = "rgba(0,0,0,0)",
     plot_bgcolor = "rgba(0,0,0,0)"
   )
+
+continent_js <- sprintf(
+  "function(el, x) {\n    const payload = %s;\n    const years = payload.years;\n    const paths = payload.paths;\n    const speed = payload.speed_ms;\n    let timer = null;\n\n    const findIndex = (label) => years.findIndex((y) => String(y) === String(label));\n\n    const setYear = (idx) => {\n      if (idx < 0 || idx >= years.length) return;\n      const yearPaths = paths[idx];\n      yearPaths.forEach((trace, i) => {\n        Plotly.restyle(el, { x: [trace.x], y: [trace.y] }, i);\n      });\n      Plotly.relayout(el, { 'sliders[0].active': idx });\n    };\n\n    const stop = () => {\n      if (timer) {\n        clearInterval(timer);\n        timer = null;\n      }\n    };\n\n    const play = () => {\n      stop();\n      let idx = 0;\n      setYear(idx);\n      timer = setInterval(() => {\n        idx += 1;\n        if (idx >= years.length) {\n          stop();\n          return;\n        }\n        setYear(idx);\n      }, speed);\n    };\n\n    const startIndex = findIndex(payload.selected_year);\n    if (startIndex >= 0) {\n      setYear(startIndex);\n    }\n\n    el.on('plotly_sliderchange', (e) => {\n      stop();\n      const idx = findIndex(e.step.label);\n      if (idx >= 0) {\n        setYear(idx);\n      }\n    });\n\n    el.on('plotly_buttonclicked', (e) => {\n      const label = e?.button?.label;\n      if (label === 'Play') {\n        play();\n      } else if (label === 'Pause') {\n        stop();\n      }\n    });\n  }",
+  jsonlite::toJSON(continent_payload, auto_unbox = TRUE)
+)
+
+fig_cont <- htmlwidgets::onRender(fig_cont, continent_js)
 
 htmltools::div(
   class = "visual-section",
