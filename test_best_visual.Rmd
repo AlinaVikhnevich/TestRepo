@@ -233,7 +233,6 @@ fig <- plot_ly(
   geojson = world_geojson,
   locations = ~Code,
   z = ~life_expectancy,
-  locationmode = "ISO-3",
   featureidkey = "properties.iso_a3",
   text = ~Entity,
   customdata = ~Year,
@@ -636,6 +635,26 @@ income_frame_opts <- list(
   frame = list(duration = income_speed_ms, redraw = FALSE),
   transition = list(duration = 0),
   mode = "immediate"
+)
+  income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
 )
 
 income_payload <- list(
