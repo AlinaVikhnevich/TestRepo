@@ -659,6 +659,7 @@ income_frames <- lapply(income_years, function(y) {
 })
 fig_income$x$frames <- income_frames
 
+# Animation speed constant (ms per frame)
 income_speed_ms <- 260
 income_frame_opts <- list(
   frame = list(duration = income_speed_ms, redraw = FALSE),
@@ -882,6 +883,7 @@ continent_frames <- lapply(seq_along(continent_years), function(i) {
 })
 fig_cont$x$frames <- continent_frames
 
+# Animation speed constant (ms per frame)
 continent_speed_ms <- 320
 continent_frame_opts <- list(
   frame = list(duration = continent_speed_ms, redraw = FALSE),
