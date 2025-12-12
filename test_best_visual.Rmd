@@ -67,8 +67,7 @@ h4.author, h4.date {
 #map-wrapper {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: center;
 }
 
 /* Playback controls styling */
@@ -78,6 +77,10 @@ h4.author, h4.date {
   justify-content: center;
   gap: 12px;
   margin: 10px 0 4px;
+}
+
+.slider-container {
+  display: block !important;
 }
 
 .playback-button {
@@ -230,10 +233,12 @@ coverage_year <- df %>%
 ```
 
 ```{r life-expectancy-map}
+map_base <- world %>%
+  sf::st_drop_geometry() %>%
+  select(iso_a3, name)
+
 get_year_data <- function(y) {
-  full <- world %>%
-    sf::st_drop_geometry() %>%
-    select(iso_a3, name)
+  full <- map_base
 
   year_values <- df %>%
     filter(Year == y) %>%
@@ -248,7 +253,8 @@ get_year_data <- function(y) {
 selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
 
-map_frame_duration <- 650
+map_locations <- map_base %>% pull(iso_a3)
+map_text <- map_base %>% pull(name)
 
 fig <- plot_ly(
   data = plot_df,
@@ -296,30 +302,29 @@ fig <- plot_ly(
   )
 )
 
+map_frame_duration <- 160
+
 map_frames <- lapply(years_available, function(y) {
   year_df <- get_year_data(y)
   list(
     name = as.character(y),
-    locations = year_df$Code,
-    z = year_df$life_expectancy,
-    text = year_df$Entity,
-    customdata = year_df$Year
+    data = list(list(
+      z = year_df$life_expectancy,
+      customdata = year_df$Year
+    ))
   )
 })
 
-steps <- lapply(seq_along(years_available), function(i) {
-  y <- years_available[i]
-  year_df <- map_frames[[i]]
+steps <- lapply(years_available, function(y) {
   list(
     label = y,
-    value = y,
-    method = "restyle",
+    method = "animate",
     args = list(
+      list(as.character(y)),
       list(
-        locations = list(year_df$locations),
-        z = list(year_df$z),
-        text = list(year_df$text),
-        customdata = list(year_df$customdata)
+        mode = "immediate",
+        frame = list(duration = map_frame_duration, redraw = FALSE),
+        transition = list(duration = 0)
       )
     )
   )
@@ -437,7 +442,7 @@ fig <- fig %>% layout(
     ),
     len = 0.90,
     x = 0.05,
-    pad = list(t = 90),
+    pad = list(t = 99),
     steps = steps,
     bgcolor = "#AB7148",
     bordercolor = "#E6CFAE",
@@ -453,77 +458,49 @@ fig <- fig %>% layout(
   dragmode = "zoom"
 ) %>%
   config(scrollZoom = TRUE)
+fig$x$frames <- map_frames
 
 fig$x$layout$sliders[[1]]$transition <- list(duration = 0)
-fig$x$layout$sliders[[1]]$y <- -0.08
 
-fig <- htmlwidgets::onRender(fig, data = list(
-  frames = map_frames,
-  years = years_available,
-  frameDuration = map_frame_duration
-),
-"function(el, x, data) {
-  const frames = data.frames || [];
-  const years = data.years || [];
-  const frameDuration = data.frameDuration || 600;
-  const playBtn = document.getElementById('map-play');
-  const pauseBtn = document.getElementById('map-pause');
-  const sliderContainer = el.querySelector('.slider-container');
-  if (sliderContainer) sliderContainer.style.display = 'block';
-
-  let timer = null;
-
-  function applyFrame(idx) {
-    if (idx < 0 || idx >= frames.length) return;
-    const f = frames[idx];
-    Plotly.restyle(el, {
-      locations: [f.locations],
-      z: [f.z],
-      text: [f.text],
-      customdata: [f.customdata]
-    }, [0]);
-    Plotly.relayout(el, {'sliders[0].active': idx, 'geo.fitbounds': false});
-  }
-
-  function stop() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function play() {
-    if (!frames.length) return;
-    stop();
-    let idx = 0;
-    applyFrame(idx);
-    timer = setInterval(() => {
-      idx = (idx + 1) % frames.length;
-      applyFrame(idx);
-    }, frameDuration);
-  }
-
-  el.on('plotly_sliderchange', evt => {
-    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
-    const idx = years.indexOf(val);
-    if (idx >= 0) {
-      stop();
-      applyFrame(idx);
-    }
-  });
-
-  if (playBtn) playBtn.addEventListener('click', play);
-  if (pauseBtn) pauseBtn.addEventListener('click', stop);
-}")
+fig$x$layout$updatemenus <- list(
+  list(
+    type = "buttons",
+    x = 0.5,
+    y = 1.12,
+    xanchor = "center",
+    showactive = FALSE,
+    buttons = list(
+      list(
+        label = "Play",
+        method = "animate",
+        args = list(
+          NULL,
+          list(
+            fromcurrent = FALSE,
+            frame = list(duration = map_frame_duration, redraw = FALSE),
+            transition = list(duration = 0)
+          )
+        )
+      ),
+      list(
+        label = "Pause",
+        method = "animate",
+        args = list(
+          NULL,
+          list(
+            mode = "immediate",
+            frame = list(duration = 0, redraw = FALSE),
+            transition = list(duration = 0)
+          )
+        )
+      )
+    )
+  )
+)
 
 htmltools::div(
   class = "visual-section",
   id = "map-wrapper",
-  tags$div(
-    class = "playback-controls",
-    tags$button(class = "playback-button", id = "map-play", "Play"),
-    tags$button(class = "playback-button", id = "map-pause", "Pause")
-  ),
   fig
 )
 ```
@@ -598,26 +575,25 @@ income_frames <- lapply(income_years, function(y) {
   year_df <- get_income_year(y)
   list(
     name = as.character(y),
-    x = year_df$life_expectancy,
-    y = year_df$Entity,
-    text = year_df$Entity,
-    customdata = year_df$Year
+    data = list(list(
+      x = year_df$life_expectancy,
+      y = year_df$Entity,
+      text = year_df$Entity,
+      customdata = year_df$Year
+    ))
   )
 })
 
-income_steps <- lapply(seq_along(income_years), function(i) {
-  y <- income_years[i]
-  frame <- income_frames[[i]]
+income_steps <- lapply(income_years, function(y) {
   list(
     label = y,
-    value = y,
-    method = "restyle",
+    method = "animate",
     args = list(
+      list(as.character(y)),
       list(
-        x = list(frame$x),
-        y = list(frame$y),
-        text = list(frame$text),
-        customdata = list(frame$customdata)
+        mode = "immediate",
+        frame = list(duration = income_frame_duration, redraw = FALSE),
+        transition = list(duration = 0)
       )
     )
   )
@@ -700,75 +676,48 @@ fig_income <- fig_income %>%
     plot_bgcolor = "rgba(0,0,0,0)"
   )
 
+fig_income$x$frames <- income_frames
+
 fig_income$x$layout$sliders[[1]]$transition <- list(duration = 0)
-fig_income$x$layout$sliders[[1]]$y <- -0.08
 
-fig_income <- htmlwidgets::onRender(fig_income, data = list(
-  frames = income_frames,
-  years = income_years,
-  frameDuration = income_frame_duration
-),
-"function(el, x, data) {
-  const frames = data.frames || [];
-  const years = data.years || [];
-  const frameDuration = data.frameDuration || 500;
-  const playBtn = document.getElementById('income-play');
-  const pauseBtn = document.getElementById('income-pause');
-  const sliderContainer = el.querySelector('.slider-container');
-  if (sliderContainer) sliderContainer.style.display = 'block';
-
-  let timer = null;
-
-  function applyFrame(idx) {
-    if (idx < 0 || idx >= frames.length) return;
-    const f = frames[idx];
-    Plotly.restyle(el, {
-      x: [f.x],
-      y: [f.y],
-      text: [f.text],
-      customdata: [f.customdata]
-    }, [0]);
-    Plotly.relayout(el, {'sliders[0].active': idx});
-  }
-
-  function stop() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function play() {
-    if (!frames.length) return;
-    stop();
-    let idx = 0;
-    applyFrame(idx);
-    timer = setInterval(() => {
-      idx = (idx + 1) % frames.length;
-      applyFrame(idx);
-    }, frameDuration);
-  }
-
-  el.on('plotly_sliderchange', evt => {
-    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
-    const idx = years.indexOf(val);
-    if (idx >= 0) {
-      stop();
-      applyFrame(idx);
-    }
-  });
-
-  if (playBtn) playBtn.addEventListener('click', play);
-  if (pauseBtn) pauseBtn.addEventListener('click', stop);
-}")
+fig_income$x$layout$updatemenus <- list(
+  list(
+    type = "buttons",
+    x = 0.5,
+    y = 1.1,
+    xanchor = "center",
+    showactive = FALSE,
+    buttons = list(
+      list(
+        label = "Play",
+        method = "animate",
+        args = list(
+          NULL,
+          list(
+            fromcurrent = FALSE,
+            frame = list(duration = income_frame_duration, redraw = FALSE),
+            transition = list(duration = 0)
+          )
+        )
+      ),
+      list(
+        label = "Pause",
+        method = "animate",
+        args = list(
+          NULL,
+          list(
+            mode = "immediate",
+            frame = list(duration = 0, redraw = FALSE),
+            transition = list(duration = 0)
+          )
+        )
+      )
+    )
+  )
+)
 
 htmltools::div(
   class = "visual-section",
-  tags$div(
-    class = "playback-controls",
-    tags$button(class = "playback-button", id = "income-play", "Play"),
-    tags$button(class = "playback-button", id = "income-pause", "Pause")
-  ),
   fig_income
 )
 ```
@@ -829,22 +778,20 @@ continent_frames <- lapply(continent_years, function(y) {
   paths <- get_continent_paths(y)
   list(
     name = as.character(y),
-    traces = seq_along(paths) - 1,
-    data = paths
+    data = lapply(paths, function(p) list(x = p$x, y = p$y))
   )
 })
 
-continent_steps <- lapply(seq_along(continent_years), function(i) {
-  y <- continent_years[i]
-  frame <- continent_frames[[i]]
+continent_steps <- lapply(continent_years, function(y) {
   list(
     label = y,
-    value = y,
-    method = "restyle",
+    method = "animate",
     args = list(
+      list(as.character(y)),
       list(
-        x = lapply(frame$data, function(p) p$x),
-        y = lapply(frame$data, function(p) p$y)
+        mode = "immediate",
+        frame = list(duration = continent_frame_duration, redraw = FALSE),
+        transition = list(duration = 0)
       )
     )
   )
@@ -921,73 +868,48 @@ fig_cont <- fig_cont %>%
     plot_bgcolor = "rgba(0,0,0,0)"
   )
 
+fig_cont$x$frames <- continent_frames
+
 fig_cont$x$layout$sliders[[1]]$transition <- list(duration = 0)
-fig_cont$x$layout$sliders[[1]]$y <- -0.08
 
-fig_cont <- htmlwidgets::onRender(fig_cont, data = list(
-  frames = continent_frames,
-  years = continent_years,
-  frameDuration = continent_frame_duration
-),
-"function(el, x, data) {
-  const frames = data.frames || [];
-  const years = data.years || [];
-  const frameDuration = data.frameDuration || 400;
-  const playBtn = document.getElementById('continent-play');
-  const pauseBtn = document.getElementById('continent-pause');
-  const sliderContainer = el.querySelector('.slider-container');
-  if (sliderContainer) sliderContainer.style.display = 'block';
-
-  let timer = null;
-
-  function applyFrame(idx) {
-    if (idx < 0 || idx >= frames.length) return;
-    const f = frames[idx];
-    Plotly.restyle(el, {
-      x: f.data.map(p => p.x),
-      y: f.data.map(p => p.y)
-    }, f.traces);
-    Plotly.relayout(el, {'sliders[0].active': idx});
-  }
-
-  function stop() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function play() {
-    if (!frames.length) return;
-    stop();
-    let idx = 0;
-    applyFrame(idx);
-    timer = setInterval(() => {
-      idx = (idx + 1) % frames.length;
-      applyFrame(idx);
-    }, frameDuration);
-  }
-
-  el.on('plotly_sliderchange', evt => {
-    const val = evt.step && (evt.step.value !== undefined ? evt.step.value : evt.step.label);
-    const idx = years.indexOf(val);
-    if (idx >= 0) {
-      stop();
-      applyFrame(idx);
-    }
-  });
-
-  if (playBtn) playBtn.addEventListener('click', play);
-  if (pauseBtn) pauseBtn.addEventListener('click', stop);
-}")
+fig_cont$x$layout$updatemenus <- list(
+  list(
+    type = "buttons",
+    x = 0.5,
+    y = 1.08,
+    xanchor = "center",
+    showactive = FALSE,
+    buttons = list(
+      list(
+        label = "Play",
+        method = "animate",
+        args = list(
+          NULL,
+          list(
+            fromcurrent = FALSE,
+            frame = list(duration = continent_frame_duration, redraw = FALSE),
+            transition = list(duration = 0)
+          )
+        )
+      ),
+      list(
+        label = "Pause",
+        method = "animate",
+        args = list(
+          NULL,
+          list(
+            mode = "immediate",
+            frame = list(duration = 0, redraw = FALSE),
+            transition = list(duration = 0)
+          )
+        )
+      )
+    )
+  )
+)
 
 htmltools::div(
   class = "visual-section",
-  tags$div(
-    class = "playback-controls",
-    tags$button(class = "playback-button", id = "continent-play", "Play"),
-    tags$button(class = "playback-button", id = "continent-pause", "Pause")
-  ),
   fig_cont
 )
 ```
