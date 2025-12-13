@@ -5,11 +5,13 @@ GeoJSON inspection (based on Natural Earth medium-scale admin-0 data loaded into
 - Somalia-related features before patch:
   - Feature with name "Somalia" carried iso_a3 "SOM".
   - Feature representing Somaliland (name "Somaliland", admin "Somaliland") carried iso_a3 "SOL" (non-ISO placeholder).
+- Kosovo-related issue uncovered after rendering checks: Natural Earth already supplied a Kosovo polygon with iso_a3 "-99", leaving a duplicate alongside the custom XKX polygon and causing -99 rows in get_year_data.
 
 Changes made:
 - Forced Kosovo rows to use Code XKX whenever Entity == "Kosovo" so every animation year keys to the custom Kosovo polygon.
 - Broadened country matching so both "Northern Cyprus" and "N. Cyprus" are merged with Cyprus; likewise Somaliland merges with Somalia before geojson export.
 - Patched GeoJSON feature properties so Northern Cyprus now reports iso_a3 = CYP and Somaliland reports iso_a3 = SOM, ensuring their polygons inherit the parent country color.
+- Excluded the built-in Natural Earth Kosovo feature and dropped any remaining iso_a3 == "-99" records from the exported GeoJSON to eliminate stray -99 codes from map data.
 - Added a helper report writer inside the Rmd to log the before/after GeoJSON feature properties and record failing install/render attempts.
 
 Commands run:
@@ -18,4 +20,4 @@ Commands run:
 - pip install geopandas --quiet (failed: upstream proxy 403)
 
 Evidence of fix:
-- GeoJSON property patches ensure featureidkey properties.iso_a3 now match the data codes (CYP for Northern Cyprus, SOM for Somaliland), so those polygons will be filled when life expectancy values are present. Kosovo codes are normalized to XKX across all years to match the Kosovo polygon.
+- GeoJSON property patches ensure featureidkey properties.iso_a3 now match the data codes (CYP for Northern Cyprus, SOM for Somaliland), and the Natural Earth Kosovo duplicate is removed with XKX retained, so those polygons will be filled when life expectancy values are present.

@@ -142,7 +142,11 @@ cyprus_union <- world_raw %>%
 
 # Remove the pieces we are replacing and fix some ISO codes
 world_countries <- world_raw %>%
-  filter(!(name %in% c("Somalia") | somaliland_name_match(name) | cyprus_name_match(name))) %>%
+  filter(
+    !(name %in% c("Somalia", "Kosovo")) &
+      !somaliland_name_match(name) &
+      !cyprus_name_match(name)
+  ) %>%
   mutate(
     iso_a3 = case_when(
       # France + territories
@@ -181,6 +185,8 @@ kosovo_poly <- admin1 %>%
   select(iso_a3, name, geometry)
 
 world <- bind_rows(world_countries, kosovo_poly)
+world <- world %>%
+  filter(!is.na(iso_a3) & iso_a3 != "-99")
 ```
 
 ```{r merge-data, include=FALSE}
