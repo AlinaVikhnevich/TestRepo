@@ -226,7 +226,7 @@ fig <- plot_ly()
 # Static outline trace so country borders stay visible even when a year has no data
 fig <- fig %>%
   add_trace(
-    type = "choropleth",
+    type = "choroplethmapbox",
     geojson = world_geojson,
     locations = map_locations$iso_a3,
     z = rep(0, nrow(map_locations)),
@@ -246,11 +246,10 @@ fig <- fig %>%
 fig <- fig %>%
   add_trace(
     data = plot_df,
-    type = "choropleth",
+    type = "choroplethmapbox",
     geojson = world_geojson,
     locations = ~Code,
     z = ~life_expectancy,
-    locationmode = "ISO-3",
     featureidkey = "properties.iso_a3",
     text = ~Entity,
     customdata = ~Year,
