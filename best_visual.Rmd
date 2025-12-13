@@ -198,7 +198,7 @@ map_locations <- world %>%
   arrange(iso_a3)
 
 get_year_data <- function(y) {
-  year_values <- df %>%
+  year_values <- df_filled %>%
     filter(Year == y) %>%
     select(Code, life_expectancy)
 
