@@ -1,35 +1,38 @@
-# Testing and Validation
+# TESTING.md
 
-## Goal
-Fix missing polygons for:
-- Kosovo
-- Northern Cyprus (as part of Cyprus)
-- Somaliland (as part of Somalia)
+## Scope and rules (read first)
 
-Design and layout must not change.
+Goal: Fix missing polygons for **Kosovo**, **Cyprus (parts)**, and **Somalia (parts)** in the Plotly choropleth map.
 
-## How to render
-From repo root:
+Hard rules:
+- **Do not modify `best_visual.Rmd`** (reference only).
+- Make changes **only** in `test_best_visual.Rmd` (and optional helper scripts).
+- **No layout, styling, font, theme, sizing, button placement, or UI changes.**
+- Do not “simplify” the visualization. The rendered HTML must look the same as the expected visual, except the missing regions must appear correctly.
 
-R -q -e 'rmarkdown::render("test_best_visual.Rmd", output_file="__codex_render.html")'
+Do not commit large rendered artifacts:
+- Do **not** add rendered HTML outputs to the repo if they are huge.
+- Codex should render locally inside the devcontainer and inspect results.
 
-## Required checks (programmatic)
-Run these in R after loading the same GeoJSON object used by the plot:
+Codex must create/update a log file:
+- Create or update `report.txt` every time work is performed.
+- `report.txt` must explain what was changed, why, what commands were run, and what the results were.
+- If anything is ambiguous, list questions in `report.txt` (but do not expand scope).
 
-1) Kosovo code alignment
-- Confirm dataset rows for Entity == "Kosovo" use Code == "XKX" for all years used by the animation.
-- Confirm GeoJSON contains a feature with properties.iso_a3 == "XKX".
+---
 
-2) Cyprus completeness
-- Identify GeoJSON features whose name indicates Northern Cyprus.
-- Confirm their properties.iso_a3 is "CYP" after the fix.
+## Environment snapshot
 
-3) Somalia completeness
-- Identify GeoJSON features whose name indicates Somaliland.
-- Confirm their properties.iso_a3 is "SOM" after the fix.
+This repository includes:
+- `sessionInfo.txt` (R session snapshot). Use it to match package versions when diagnosing environment-dependent behavior.
 
-## Required checks (visual)
-Open __codex_render.html and verify:
-- Kosovo is filled when neighboring countries are filled
-- The northern part of Cyprus is filled, not blank
-- Somaliland region is filled, not blank
+Optional: If `renv.lock` is ever added, prefer `renv::restore()` for reproducibility.
+
+---
+
+## How to run Codex (required)
+
+Run Codex from repo root with write permissions enabled:
+
+```bash
+codex -a never -C /workspaces/TestRepo -c 'sandbox_mode="workspace-write"' exec "<commands>"
