@@ -1,0 +1,15 @@
+{
+  "name": "R for RMarkdown",
+  "image": "ghcr.io/rocker-org/devcontainer/r-ver:latest",
+  "features": {},
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y pandoc libcurl4-openssl-dev libssl-dev libxml2-dev libudunits2-dev libgdal-dev gdal-bin libgeos-dev libproj-dev proj-data proj-bin",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "REditorSupport.r",
+        "posit.shiny",
+        "yihui.knitr"
+      ]
+    }
+  }
+}
