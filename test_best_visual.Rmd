@@ -95,40 +95,53 @@ metadata <- fromJSON("life-expectancy.metadata.json")
 df <- df %>%
   mutate(
     Code = case_when(
-      Code == "OWID_KOS" ~ "XKX",
-      Code == "SOL"      ~ "SOM",
+      Code == "OWID_KOS" ~ "XKX",   # Kosovo
+      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
       TRUE               ~ Code
     )
   ) %>%
-  filter(str_detect(Code, "^[A-Z]{3}$")) %>%
+  filter(str_detect(Code, "^[A-Z]{3}$")) %>%   # keep only ISO-like codes (3 letters)
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
   rename(life_expectancy = `Period life expectancy at birth`)
 ```
 
 ```{r load-shapefile, include=FALSE}
+# Load base Natural Earth country polygons
+# Base countries from Natural Earth
 world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+
+# Union Somalia + Somaliland into one Somalia polygon
 somalia_union <- world_raw %>%
   filter(name %in% c("Somalia", "Somaliland")) %>%
   mutate(iso_a3 = "SOM", name = "Somalia") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
+
+# Union Cyprus + N. Cyprus into one Cyprus polygon
 cyprus_union <- world_raw %>%
   filter(name %in% c("Cyprus", "N. Cyprus")) %>%
   mutate(iso_a3 = "CYP", name = "Cyprus") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
+
+# Remove the pieces we are replacing and fix some ISO codes
 world_countries <- world_raw %>%
   filter(!name %in% c("Somalia", "Somaliland", "Cyprus", "N. Cyprus")) %>%
   mutate(
     iso_a3 = case_when(
+      # France + territories
       name == "France"                ~ "FRA",
       name == "French Guiana"         ~ "GUF",
       name == "Guadeloupe"            ~ "GLP",
       name == "Martinique"            ~ "MTQ",
       name == "Mayotte"               ~ "MYT",
       name == "Reunion"               ~ "REU",
+
+      # Norway + territories
       name == "Norway"                ~ "NOR",
       name == "Svalbard and Jan Mayen"~ "SJM",
+
+      # Gibraltar, BES, Tokelau
       name == "Gibraltar"             ~ "GIB",
       name == "Caribbean Netherlands" ~ "BES",
       name == "Tokelau"               ~ "TKL",
@@ -137,7 +150,9 @@ world_countries <- world_raw %>%
     )
   ) %>%
   select(iso_a3, name, geometry)
+
 world_countries <- bind_rows(world_countries, somalia_union, cyprus_union)
+
 admin1 <- rnaturalearth::ne_states(returnclass = "sf")
 
 kosovo_poly <- admin1 %>%
@@ -148,6 +163,7 @@ kosovo_poly <- admin1 %>%
     name   = "Kosovo"
   ) %>%
   select(iso_a3, name, geometry)
+
 world <- bind_rows(world_countries, kosovo_poly)
 ```
 
@@ -206,6 +222,8 @@ selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
 
 fig <- plot_ly()
+
+# Static outline trace so country borders stay visible even when a year has no data
 fig <- fig %>%
   add_trace(
     type = "choropleth",
@@ -223,6 +241,8 @@ fig <- fig %>%
     ),
     hoverinfo = "skip"
   )
+
+# Data trace that is restyled during playback
 fig <- fig %>%
   add_trace(
     data = plot_df,
@@ -240,7 +260,7 @@ fig <- fig %>%
       c(0.66, "#C7BF99"),
       c(1.00, "#C1CF91")
     ),
-    zmin = 40,
+    zmin = 30,
     zmax = 85,
     colorbar = list(
       orientation = "h",
@@ -260,8 +280,8 @@ fig <- fig %>%
     ),
     marker = list(
       line = list(
-        color = "#4F494A",
-        width = 0.8
+        color = "#4F494A",   # Dark brown outline
+        width = 0.8          # Normal thickness
       )
     ),
     hovertemplate = paste0(
@@ -307,7 +327,6 @@ map_payload <- list(
   speed_ms = map_speed_ms
 )
 
-# Visual styling note: the adjustments below modify only the HTML-rendered graphics (map, bar, and line visuals) to control their appearance.
 fig <- fig %>% layout(
   title = list(
     text = "<b>Life Expectancy by Country: Medieval to Current Time</b>",
@@ -325,12 +344,12 @@ fig <- fig %>% layout(
     color = "#1f2933"
   ),
   hoverlabel = list(
-    bgcolor = "#D1BDA3",
-    bordercolor = "#8C7B7F",
+    bgcolor = "#D1BDA3",        # Hover background color
+    bordercolor = "#8C7B7F",    # Hover border color
     font = list(
       family = "Cormorant Garamond, serif",
       size = 16,
-      color = "#1f2933"
+      color = "#1f2933"         # Hover text color
     ),
     namelength = -1,
     align = "left"
@@ -372,51 +391,23 @@ fig <- fig %>% layout(
         size = 22,
         color = "#1f2933"
       )
-    ),
-    list(
-      text = "<b>Medieval</b>",
-      x = 0.10,
-      y = -0.33,
-      xref = "paper",
-      yref = "paper",
-      xanchor = "left",
-      showarrow = FALSE,
-      font = list(
-        family = "Cormorant Garamond, serif",
-        size = 21,
-        color = "#1f2933"
-      )
-    ),
-    list(
-      text = "<b>Current Time</b>",
-      x = 0.90,
-      y = -0.33,
-      xref = "paper",
-      yref = "paper",
-      xanchor = "right",
-      showarrow = FALSE,
-      font = list(
-        family = "Cormorant Garamond, serif",
-        size = 21,
-        color = "#1f2933"
-      )
     )
   ),
   sliders = list(list(
     active = slider_active,
     currentvalue = list(
       prefix = "<b>Calendar Year: </b>",
-      x = 0.5,
+      x = 0.5,               # Centers the label
       xanchor = "center",
       font = list(
         family = "Cormorant Garamond, serif",
-        size = 22,
+        size = 22,           # Larger text
         color = "#1f2933"
       )
     ),
-    len = 0.90,
-    x = 0.12,
-    y = -0.26,
+    len = 0.79,
+    x = 0.16,
+    y = -0.2,
     pad = list(t = 30),
     steps = map_steps,
     bgcolor = "#AB7148",
@@ -427,8 +418,8 @@ fig <- fig %>% layout(
     type = "buttons",
     showactive = FALSE,
     direction = "right",
-    x = 0.02,
-    y = -0.26,
+    x = 0.06,
+    y = -0.27,
     xanchor = "left",
     yanchor = "top",
     pad = list(t = 30),
@@ -582,6 +573,8 @@ fig_income <- plot_ly(
 
   x = ~life_expectancy,
   y = ~Entity,
+
+  # INSIDE BAR LABELS (income groups)
   text = ~Entity,
   textposition = "inside",
   insidetextanchor = "right",
@@ -590,6 +583,8 @@ fig_income <- plot_ly(
     size = 18,
     color = "#1f2933"
   ),
+
+  # HORIZONTAL GRADIENT BAR
   marker = list(
     color = ~life_expectancy,
     colorscale = list(
@@ -624,6 +619,8 @@ income_frames <- lapply(income_years, function(y) {
   )
 })
 fig_income$x$frames <- income_frames
+
+# Animation speed constant (ms per frame)
 income_speed_ms <- 260
 income_frame_opts <- list(
   frame = list(duration = income_speed_ms, redraw = FALSE),
@@ -631,13 +628,6 @@ income_frame_opts <- list(
   mode = "immediate"
 )
   income_payload <- list(
-  years = income_years,
-  values = income_year_values,
-  selected_year = selected_income_year,
-  speed_ms = income_speed_ms
-)
-
-income_payload <- list(
   years = income_years,
   values = income_year_values,
   selected_year = selected_income_year,
@@ -728,8 +718,14 @@ fig_income <- fig_income %>%
       size = 18,
       color = "#1f2933"
     ),
+
+    # REMOVE LEFT-SIDE LABELS COMPLETELY 
     yaxis = list(
-      title = "",
+      title = "<b>Income Groups</b>",
+       font = list(
+        family = "Cormorant Garamond, serif",
+        size = 28,
+        color = "#1f2933"),
       showticklabels = FALSE
     ),
 
@@ -739,7 +735,7 @@ fig_income <- fig_income %>%
         standoff = 8,
         font = list(
           family = "Cormorant Garamond, serif",
-          size = 20,
+          size = 22,
           color = "#1f2933"
         )
       ),
@@ -772,9 +768,9 @@ fig_income <- fig_income %>%
           color = "#1f2933"
         )
       ),
-      len = 0.99,
-      x = 0.12,
-      y = -0.25,
+      len = 0.86,
+      x = 0.08,
+      y = -0.08,
       pad = list(t = 30),
       steps = income_steps,
       bgcolor = "#AB7148",
@@ -789,8 +785,8 @@ fig_income <- fig_income %>%
       type = "buttons",
       showactive = FALSE,
       direction = "right",
-      x = 0.02,
-      y = -0.25,
+      x = -0.03,
+      y = -0.16,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
@@ -886,6 +882,8 @@ continent_frames <- lapply(seq_along(continent_years), function(i) {
   )
 })
 fig_cont$x$frames <- continent_frames
+
+# Animation speed constant (ms per frame)
 continent_speed_ms <- 320
 continent_frame_opts <- list(
   frame = list(duration = continent_speed_ms, redraw = FALSE),
@@ -983,7 +981,7 @@ fig_cont <- fig_cont %>%
       active = length(continent_years) - 1,
       currentvalue = list(
         prefix = "<b>Calendar Year: </b>",
-        x = 0.5,
+        x = 0.05,
         xanchor = "center",
         font = list(
           family = "Cormorant Garamond, serif",
@@ -991,9 +989,9 @@ fig_cont <- fig_cont %>%
           color = "#1f2933"
         )
       ),
-      len = 0.99,
-      x = 0.12,
-      y = -0.25,
+      len = 0.91,
+      x = 0.1,
+      y = -0.05,
       pad = list(t = 30),
       steps = continent_steps,
       bgcolor = "#AB7148",
@@ -1008,8 +1006,8 @@ fig_cont <- fig_cont %>%
       type = "buttons",
       showactive = FALSE,
       direction = "right",
-      x = 0.02,
-      y = -0.25,
+      x = -0.01,
+      y = -0.12,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
