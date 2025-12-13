@@ -360,12 +360,29 @@ fig <- fig %>% layout(
     namelength = -1,
     align = "left"
   ),
-  mapbox = list(
-    style = "white-bg",
-    center = list(lon = 0, lat = 20),
-    zoom = 0.9,
-    bearing = 0,
-    pitch = 0
+  geo = list(
+    projection = list(type = "natural earth"),
+    showframe = FALSE,
+    showcoastlines = FALSE,
+    showlakes = FALSE,
+    showcountries = FALSE,
+    landcolor = "#E6D2B8",
+    bgcolor = "rgba(0,0,0,0)",
+    showgrid = TRUE,
+    gridcolor = "#422E12",
+    gridwidth = 0.3,
+    lataxis = list(
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3,
+      range = c(-60, 85)
+    ),
+    lonaxis = list(
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3,
+      range = c(-180, 180)
+    )
   ),
   annotations = list(
     list(
