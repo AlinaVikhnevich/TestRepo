@@ -229,6 +229,7 @@ fig <- fig %>%
     type = "choropleth",
     geojson = world_geojson,
     locations = map_locations$iso_a3,
+    locationmode = "geojson-id",
     z = rep(0, nrow(map_locations)),
     featureidkey = "properties.iso_a3",
     colorscale = list(
@@ -237,7 +238,7 @@ fig <- fig %>%
     ),
     showscale = FALSE,
     marker = list(
-      line = list(color = "#4F494A", width = 0.8)
+      line = list(color = "#422E12", width = 0.8)
     ),
     hoverinfo = "skip"
   )
@@ -249,16 +250,23 @@ fig <- fig %>%
     type = "choropleth",
     geojson = world_geojson,
     locations = ~Code,
+    locationmode = "geojson-id",
     z = ~life_expectancy,
-    locationmode = "ISO-3",
     featureidkey = "properties.iso_a3",
     text = ~Entity,
     customdata = ~Year,
     colorscale = list(
-      c(0.00, "#6E6365"),
-      c(0.33, "#9C847C"),
-      c(0.66, "#C7BF99"),
-      c(1.00, "#C1CF91")
+      c(0.00, "#4A3C2C"),
+      c(0.10, "#6E5248"),
+      c(0.20, "#825953"),
+      c(0.30, "#A3786A"),
+      c(0.40, "#B88F67"),
+      c(0.50, "#D1B179"),
+      c(0.60, "#BAAE41"),
+      c(0.70, "#B3B251"),
+      c(0.80, "#AEB55C"),
+      c(0.90, "#7AA345"),
+      c(1.00, "#4D6E4D")
     ),
     zmin = 30,
     zmax = 85,
@@ -280,8 +288,8 @@ fig <- fig %>%
     ),
     marker = list(
       line = list(
-        color = "#4F494A",   # Dark brown outline
-        width = 0.8          # Normal thickness
+        color = "#4A3C30",   # Dark brown outline
+        width = 0.4          # Normal thickness
       )
     ),
     hovertemplate = paste0(
@@ -360,20 +368,20 @@ fig <- fig %>% layout(
     showcoastlines = FALSE,
     showlakes = FALSE,
     showcountries = FALSE,
-    landcolor = "#D1BDA3",
+    landcolor = "#E6D2B8",
     bgcolor = "rgba(0,0,0,0)",
     showgrid = TRUE,
-    gridcolor = "#545151",
+    gridcolor = "#422E12",
     gridwidth = 0.3,
     lataxis = list(
       showgrid = TRUE,
-      gridcolor = "#545151",
+      gridcolor = "#422E12",
       gridwidth = 0.3,
       range = c(-60, 85)
     ),
     lonaxis = list(
       showgrid = TRUE,
-      gridcolor = "#545151",
+      gridcolor = "#422E12",
       gridwidth = 0.3,
       range = c(-180, 180)
     )
