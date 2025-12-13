@@ -189,6 +189,16 @@ coverage_year <- df %>%
   filter(count == max(count)) %>%
   summarise(selected = max(Year)) %>%
   pull(selected)
+
+full_years <- seq(min(years_available), max(years_available))
+
+df_filled <- df %>%
+  select(Code, Year, life_expectancy) %>%
+  group_by(Code) %>%
+  tidyr::complete(Year = full_years) %>%
+  arrange(Year) %>%
+  tidyr::fill(life_expectancy, .direction = "down") %>%
+  ungroup()
 ```
 
 ```{r life-expectancy-map}
