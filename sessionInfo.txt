@@ -1,10 +1,10 @@
-R version 4.3.3 (2024-02-29)
-Platform: x86_64-pc-linux-gnu (64-bit)
-Running under: Ubuntu 22.04.5 LTS
+R version 4.5.2 (2025-10-31)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 24.04.3 LTS
 
 Matrix products: default
 BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
-LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so;  LAPACK version 3.10.0
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
 
 locale:
  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
@@ -20,5 +20,17 @@ tzcode source: system (glibc)
 attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
+other attached packages:
+[1] jsonlite_2.0.0 rmarkdown_2.30
+
 loaded via a namespace (and not attached):
-[1] compiler_4.3.3
+ [1] compiler_4.5.2    fastmap_1.2.0     cli_3.6.5         htmltools_0.5.8.1
+ [5] tools_4.5.2       knitr_1.50        xfun_0.54         digest_0.6.37    
+ [9] rlang_1.1.6       evaluate_1.0.5   
+
+Requested packages:
+plotly | version: NOT INSTALLED | skipped
+sf | version: NOT INSTALLED | skipped
+rmarkdown | version: 2.30 | loaded
+dplyr | version: NOT INSTALLED | skipped
+jsonlite | version: 2.0.0 | loaded
