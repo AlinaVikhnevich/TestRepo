@@ -95,53 +95,40 @@ metadata <- fromJSON("life-expectancy.metadata.json")
 df <- df %>%
   mutate(
     Code = case_when(
-      Code == "OWID_KOS" ~ "XKX",   # Kosovo
-      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
+      Code == "OWID_KOS" ~ "XKX",
+      Code == "SOL"      ~ "SOM",
       TRUE               ~ Code
     )
   ) %>%
-  filter(str_detect(Code, "^[A-Z]{3}$")) %>%   # keep only ISO-like codes (3 letters)
+  filter(str_detect(Code, "^[A-Z]{3}$")) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
   rename(life_expectancy = `Period life expectancy at birth`)
 ```
 
 ```{r load-shapefile, include=FALSE}
-# Load base Natural Earth country polygons
-# Base countries from Natural Earth
 world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
-
-# Union Somalia + Somaliland into one Somalia polygon
 somalia_union <- world_raw %>%
   filter(name %in% c("Somalia", "Somaliland")) %>%
   mutate(iso_a3 = "SOM", name = "Somalia") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
-
-# Union Cyprus + N. Cyprus into one Cyprus polygon
 cyprus_union <- world_raw %>%
   filter(name %in% c("Cyprus", "N. Cyprus")) %>%
   mutate(iso_a3 = "CYP", name = "Cyprus") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
-
-# Remove the pieces we are replacing and fix some ISO codes
 world_countries <- world_raw %>%
   filter(!name %in% c("Somalia", "Somaliland", "Cyprus", "N. Cyprus")) %>%
   mutate(
     iso_a3 = case_when(
-      # France + territories
       name == "France"                ~ "FRA",
       name == "French Guiana"         ~ "GUF",
       name == "Guadeloupe"            ~ "GLP",
       name == "Martinique"            ~ "MTQ",
       name == "Mayotte"               ~ "MYT",
       name == "Reunion"               ~ "REU",
-
-      # Norway + territories
       name == "Norway"                ~ "NOR",
       name == "Svalbard and Jan Mayen"~ "SJM",
-
-      # Gibraltar, BES, Tokelau
       name == "Gibraltar"             ~ "GIB",
       name == "Caribbean Netherlands" ~ "BES",
       name == "Tokelau"               ~ "TKL",
@@ -150,11 +137,7 @@ world_countries <- world_raw %>%
     )
   ) %>%
   select(iso_a3, name, geometry)
-
-# Add back the unions
 world_countries <- bind_rows(world_countries, somalia_union, cyprus_union)
-
-# Load admin-1 to get Kosovo polygon
 admin1 <- rnaturalearth::ne_states(returnclass = "sf")
 
 kosovo_poly <- admin1 %>%
@@ -165,8 +148,6 @@ kosovo_poly <- admin1 %>%
     name   = "Kosovo"
   ) %>%
   select(iso_a3, name, geometry)
-
-# Final world object with Kosovo included
 world <- bind_rows(world_countries, kosovo_poly)
 ```
 
@@ -177,9 +158,6 @@ map_df <- world %>%
 ```
 
 ```{r geojson}
-# Write world sf to a temporary GeoJSON and read it back as a list
-# Keeping the GeoJSON available lets plotly compute fit bounds cleanly
-# for the geo projection without repeated world copies.
 tmp_geojson <- tempfile(fileext = ".geojson")
 sf::st_write(world, tmp_geojson, driver = "GeoJSON", quiet = TRUE)
 world_geojson <- jsonlite::read_json(tmp_geojson, simplifyVector = FALSE)
@@ -228,8 +206,6 @@ selected_year <- coverage_year
 plot_df <- get_year_data(selected_year)
 
 fig <- plot_ly()
-
-# Static outline trace so country borders stay visible even when a year has no data
 fig <- fig %>%
   add_trace(
     type = "choropleth",
@@ -247,8 +223,6 @@ fig <- fig %>%
     ),
     hoverinfo = "skip"
   )
-
-# Data trace that is restyled during playback
 fig <- fig %>%
   add_trace(
     data = plot_df,
@@ -286,8 +260,8 @@ fig <- fig %>%
     ),
     marker = list(
       line = list(
-        color = "#4F494A",   # Dark brown outline
-        width = 0.8          # Normal thickness
+        color = "#4F494A",
+        width = 0.8
       )
     ),
     hovertemplate = paste0(
@@ -333,6 +307,7 @@ map_payload <- list(
   speed_ms = map_speed_ms
 )
 
+# Visual styling note: the adjustments below modify only the HTML-rendered graphics (map, bar, and line visuals) to control their appearance.
 fig <- fig %>% layout(
   title = list(
     text = "<b>Life Expectancy by Country: Medieval to Current Time</b>",
@@ -350,12 +325,12 @@ fig <- fig %>% layout(
     color = "#1f2933"
   ),
   hoverlabel = list(
-    bgcolor = "#D1BDA3",        # Hover background color
-    bordercolor = "#8C7B7F",    # Hover border color
+    bgcolor = "#D1BDA3",
+    bordercolor = "#8C7B7F",
     font = list(
       family = "Cormorant Garamond, serif",
       size = 16,
-      color = "#1f2933"         # Hover text color
+      color = "#1f2933"
     ),
     namelength = -1,
     align = "left"
@@ -431,11 +406,11 @@ fig <- fig %>% layout(
     active = slider_active,
     currentvalue = list(
       prefix = "<b>Calendar Year: </b>",
-      x = 0.5,               # Centers the label
+      x = 0.5,
       xanchor = "center",
       font = list(
         family = "Cormorant Garamond, serif",
-        size = 22,           # Larger text
+        size = 22,
         color = "#1f2933"
       )
     ),
@@ -607,8 +582,6 @@ fig_income <- plot_ly(
 
   x = ~life_expectancy,
   y = ~Entity,
-
-  # INSIDE BAR LABELS (income groups)
   text = ~Entity,
   textposition = "inside",
   insidetextanchor = "right",
@@ -617,8 +590,6 @@ fig_income <- plot_ly(
     size = 18,
     color = "#1f2933"
   ),
-
-  # HORIZONTAL GRADIENT BAR
   marker = list(
     color = ~life_expectancy,
     colorscale = list(
@@ -653,8 +624,6 @@ income_frames <- lapply(income_years, function(y) {
   )
 })
 fig_income$x$frames <- income_frames
-
-# Animation speed constant (ms per frame)
 income_speed_ms <- 260
 income_frame_opts <- list(
   frame = list(duration = income_speed_ms, redraw = FALSE),
@@ -662,6 +631,13 @@ income_frame_opts <- list(
   mode = "immediate"
 )
   income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
   years = income_years,
   values = income_year_values,
   selected_year = selected_income_year,
@@ -752,8 +728,6 @@ fig_income <- fig_income %>%
       size = 18,
       color = "#1f2933"
     ),
-
-    # REMOVE LEFT-SIDE LABELS COMPLETELY
     yaxis = list(
       title = "",
       showticklabels = FALSE
@@ -912,8 +886,6 @@ continent_frames <- lapply(seq_along(continent_years), function(i) {
   )
 })
 fig_cont$x$frames <- continent_frames
-
-# Animation speed constant (ms per frame)
 continent_speed_ms <- 320
 continent_frame_opts <- list(
   frame = list(duration = continent_speed_ms, redraw = FALSE),
