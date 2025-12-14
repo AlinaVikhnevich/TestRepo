@@ -101,15 +101,13 @@ metadata <- fromJSON("life-expectancy.metadata.json")
 
 df <- df %>%
   mutate(
-    Code = toupper(Code),
-    Code = dplyr::case_when(
+    Code = case_when(
       Entity == "Kosovo" & Code %in% c("OWID_KOS", "-99") ~ "XKX",
       Entity == "Kosovo" & is.na(Code) ~ "XKX",
-      Code == "OWID_KOS" ~ "XKX",
-      Code == "SOL" ~ "SOM", # Somaliland merged into Somalia (defensive)
-      TRUE ~ Code
-    ),
-    Code = if_else(!is.na(Code) & str_detect(Code, "^[A-Z]{3}$"), Code, NA_character_)
+      Code == "OWID_KOS" ~ "XKX",   # Kosovo
+      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
+      TRUE               ~ Code
+    )
   ) %>%
   filter(!is.na(Code)) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
@@ -246,8 +244,8 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
 
   if (
     stringr::str_detect(name_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE)) |
-      stringr::str_detect(admin_val, regex("Cyprus", ignore_case = TRUE)) |
-      stringr::str_detect(sovereignt_val, regex("Cyprus", ignore_case = TRUE))
+      stringr::str_detect(admin_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE))
   ) {
     props$iso_a3 <- "CYP"
     props$admin <- if (nzchar(admin_val)) admin_val else "Cyprus"
@@ -256,8 +254,8 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
 
   if (
     stringr::str_detect(name_val, regex("Somaliland", ignore_case = TRUE)) |
-      stringr::str_detect(admin_val, regex("Somali", ignore_case = TRUE)) |
-      stringr::str_detect(sovereignt_val, regex("Somali", ignore_case = TRUE))
+      stringr::str_detect(admin_val, regex("Somaliland", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt_val, regex("Somaliland", ignore_case = TRUE))
   ) {
     props$iso_a3 <- "SOM"
     if (!nzchar(admin_val)) props$admin <- "Somalia"
@@ -285,14 +283,6 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
   feat
 })
 
-world_geojson$features <- purrr::keep(
-  world_geojson$features,
-  ~{
-    props <- .x$properties
-    !(is.null(props$iso_a3) || identical(props$iso_a3, "-99") || is.na(props$iso_a3))
-  }
-)
-
 feature_rows_after <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
   props <- feat$properties
   tibble::tibble(
@@ -303,6 +293,66 @@ feature_rows_after <- purrr::imap_dfr(world_geojson$features, function(feat, idx
     iso_a3 = props$iso_a3 %||% props$ISO_A3 %||% NA_character_
   )
 })
+
+```{r diagnostics, echo=TRUE}
+diagnostic_year <- 2023
+
+diag_counts <- feature_rows_after %>%
+  filter(iso_a3 %in% c("XKX", "CYP", "SOM", "-99")) %>%
+  count(iso_a3, name = "n")
+
+northern_cyprus_rows <- feature_rows_after %>%
+  filter(
+    stringr::str_detect(coalesce(admin, ""), regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(coalesce(name, ""), regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(coalesce(sovereignt, ""), regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE))
+  )
+
+somaliland_rows <- feature_rows_after %>%
+  filter(
+    stringr::str_detect(coalesce(name, ""), regex("Somaliland", ignore_case = TRUE)) |
+      stringr::str_detect(coalesce(admin, ""), regex("Somaliland", ignore_case = TRUE)) |
+      stringr::str_detect(coalesce(sovereignt, ""), regex("Somaliland", ignore_case = TRUE))
+  )
+
+diagnostic_map_locations <- world %>%
+  sf::st_drop_geometry() %>%
+  select(iso_a3, name) %>%
+  arrange(iso_a3)
+
+diagnostic_year_values <- df %>%
+  filter(Year == diagnostic_year) %>%
+  select(Code, life_expectancy)
+
+diagnostic_year_df <- diagnostic_map_locations %>%
+  left_join(diagnostic_year_values, by = c("iso_a3" = "Code")) %>%
+  rename(Entity = name, Code = iso_a3) %>%
+  mutate(Year = diagnostic_year)
+
+kosovo_rows_2023 <- diagnostic_year_df %>%
+  filter(!is.na(Entity) & Entity == "Kosovo") %>%
+  distinct(Code, Entity, life_expectancy)
+
+codes_missing_geo <- setdiff(
+  unique(stats::na.omit(diagnostic_year_df$Code)),
+  unique(stats::na.omit(feature_rows_after$iso_a3))
+)
+
+cat("GeoJSON feature counts (XKX/CYP/SOM/-99):\n")
+print(diag_counts)
+
+cat("\nNorthern Cyprus feature rows (after patch):\n")
+print(northern_cyprus_rows)
+
+cat("\nSomaliland feature rows (after patch):\n")
+print(somaliland_rows)
+
+cat("\nKosovo rows from get_year_data(2023)-equivalent: should be XKX only:\n")
+print(kosovo_rows_2023)
+
+cat("\nTop codes in year data not found in GeoJSON iso_a3 (up to 30):\n")
+print(head(codes_missing_geo, 30))
+```
 
 cyprus_features_after <- feature_rows_after %>%
   filter(
