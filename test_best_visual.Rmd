@@ -109,7 +109,8 @@ df <- df %>%
       TRUE               ~ Code
     )
   ) %>%
-  filter(!is.na(Code)) %>%
+  mutate(Code = stringr::str_trim(toupper(Code))) %>%
+  filter(!is.na(Code) & Code != "") %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
   rename(life_expectancy = `Period life expectancy at birth`) %>%
   group_by(Code, Entity) %>%
@@ -201,6 +202,13 @@ world <- world %>%
 ```
 
 ```{r merge-data, include=FALSE}
+world <- world %>%
+  mutate(
+    iso_a3 = as.character(iso_a3),
+    iso_a3 = stringr::str_trim(toupper(iso_a3))
+  ) %>%
+  filter(!is.na(iso_a3) & iso_a3 != "")
+
 map_df <- world %>%
   left_join(df, by = c("iso_a3" = "Code")) %>%
   filter(!is.na(geometry), !is.na(Year))

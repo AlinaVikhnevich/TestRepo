@@ -4,9 +4,6 @@ LOCAL TESTS TO RUN (Mac / RStudio Terminal)
 R -q -e "rmarkdown::render('test_best_visual.Rmd', output_file='__local_check.html')"
 
 2) Run diagnostics (copy/paste into R console)
-source('test_best_visual.Rmd', local = TRUE)  # runs the diagnostics-geojson-summary and diagnostics-report chunks during render
-
-OR (preferred): run this if a diagnostics script exists:
 R -q -e "source('diagnostics.R')"
 
 3) Expected diagnostic outputs to paste back to Codex
