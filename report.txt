@@ -1,0 +1,20 @@
+GeoJSON findings:
+- Natural Earth includes a Kosovo feature flagged as iso_a3=-99 alongside the custom Kosovo geometry we build as XKX.
+- Northern Cyprus and Somaliland polygons are present in the Natural Earth data with non-parent iso_a3 codes, so they must be patched to align with CYP and SOM.
+
+Data changes applied:
+- Recode Kosovo rows so OWID_KOS, -99, or NA values become XKX while leaving all other codes untouched.
+- Keep the original cadence (no forward-fill) to match the prior visual behavior.
+
+GeoJSON changes applied:
+- Patch Northern Cyprus properties.iso_a3 to CYP and Somaliland to SOM without removing any other features.
+- Leave other -99 features intact so the map geometry is not thinned; only the Kosovo admin-level polygon is explicitly tagged as XKX when detected.
+
+Diagnostics added (run diagnostics.R):
+- Prints counts of XKX, CYP, SOM, and -99 features before/after patching.
+- Shows the Northern Cyprus and Somaliland feature rows with their patched iso_a3 values.
+- Lists Kosovo codes from the 2023 year slice (should be XKX) and the top codes missing from the GeoJSON key.
+
+Commands to run locally:
+- R -q -e "rmarkdown::render('test_best_visual.Rmd', output_file='__local_check.html')"
+- R -q -e "source('diagnostics.R')"
