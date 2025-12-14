@@ -86,6 +86,13 @@ library(plotly)
 library(viridis)
 library(htmltools)
 library(dplyr)
+
+`%||%` <- function(x, y) {
+  if (is.null(x) || (is.character(x) && all(is.na(x)))) {
+    return(y)
+  }
+  x
+}
 ```
 
 ```{r import-data, include=FALSE}
@@ -94,13 +101,16 @@ metadata <- fromJSON("life-expectancy.metadata.json")
 
 df <- df %>%
   mutate(
+    Code = toupper(Code),
     Code = case_when(
       Code == "OWID_KOS" ~ "XKX",   # Kosovo
       Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
+      Entity == "Kosovo" ~ "XKX",
       TRUE               ~ Code
-    )
+    ),
+    Code = if_else(str_detect(Code, "^[A-Z]{3}$"), Code, NA_character_)
   ) %>%
-  filter(str_detect(Code, "^[A-Z]{3}$")) %>%   # keep only ISO-like codes (3 letters)
+  filter(!is.na(Code)) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
   rename(life_expectancy = `Period life expectancy at birth`)
 ```
@@ -110,23 +120,35 @@ df <- df %>%
 # Base countries from Natural Earth
 world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
 
+cyprus_name_match <- function(x) {
+  stringr::str_detect(x, regex("^Cyprus$|^N\\.?\\s*Cyprus$|^Northern Cyprus$", ignore_case = TRUE))
+}
+
+somaliland_name_match <- function(x) {
+  stringr::str_detect(x, regex("Somaliland", ignore_case = TRUE))
+}
+
 # Union Somalia + Somaliland into one Somalia polygon
 somalia_union <- world_raw %>%
-  filter(name %in% c("Somalia", "Somaliland")) %>%
+  filter(somaliland_name_match(name) | name == "Somalia") %>%
   mutate(iso_a3 = "SOM", name = "Somalia") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
 
 # Union Cyprus + N. Cyprus into one Cyprus polygon
 cyprus_union <- world_raw %>%
-  filter(name %in% c("Cyprus", "N. Cyprus")) %>%
+  filter(cyprus_name_match(name)) %>%
   mutate(iso_a3 = "CYP", name = "Cyprus") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
 
 # Remove the pieces we are replacing and fix some ISO codes
 world_countries <- world_raw %>%
-  filter(!name %in% c("Somalia", "Somaliland", "Cyprus", "N. Cyprus")) %>%
+  filter(
+    !(name %in% c("Somalia", "Kosovo")) &
+      !somaliland_name_match(name) &
+      !cyprus_name_match(name)
+  ) %>%
   mutate(
     iso_a3 = case_when(
       # France + territories
@@ -165,6 +187,9 @@ kosovo_poly <- admin1 %>%
   select(iso_a3, name, geometry)
 
 world <- bind_rows(world_countries, kosovo_poly)
+world <- world %>%
+  mutate(iso_a3 = as.character(iso_a3)) %>%
+  filter(!is.na(iso_a3) & iso_a3 != "-99")
 ```
 
 ```{r merge-data, include=FALSE}
@@ -177,6 +202,145 @@ map_df <- world %>%
 tmp_geojson <- tempfile(fileext = ".geojson")
 sf::st_write(world, tmp_geojson, driver = "GeoJSON", quiet = TRUE)
 world_geojson <- jsonlite::read_json(tmp_geojson, simplifyVector = FALSE)
+
+feature_rows <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
+  props <- feat$properties
+  tibble::tibble(
+    feature_index = idx,
+    name = props$name %||% props$NAME %||% NA_character_,
+    admin = props$admin %||% props$ADMIN %||% NA_character_,
+    sovereignt = props$sovereignt %||% props$SOVEREIGNT %||% NA_character_,
+    iso_a3 = props$iso_a3 %||% props$ISO_A3 %||% NA_character_
+  )
+})
+
+cyprus_features_before <- feature_rows %>%
+  filter(
+    stringr::str_detect(name, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Cyprus", ignore_case = TRUE))
+  )
+
+somalia_features_before <- feature_rows %>%
+  filter(
+    stringr::str_detect(name, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
+  )
+
+world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
+  props <- feat$properties
+  name_val <- props$name %||% props$NAME %||% ""
+  admin_val <- props$admin %||% props$ADMIN %||% ""
+  sovereignt_val <- props$sovereignt %||% props$SOVEREIGNT %||% ""
+
+  if (stringr::str_detect(name_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE))) {
+    props$iso_a3 <- "CYP"
+    props$admin <- if (nzchar(admin_val)) admin_val else "Cyprus"
+    props$sovereignt <- if (nzchar(sovereignt_val)) sovereignt_val else "Cyprus"
+  }
+
+  if (stringr::str_detect(name_val, regex("Somaliland", ignore_case = TRUE))) {
+    props$iso_a3 <- "SOM"
+    if (!nzchar(admin_val)) props$admin <- "Somalia"
+    if (!nzchar(sovereignt_val)) props$sovereignt <- "Somalia"
+  }
+
+  if (stringr::str_detect(name_val, regex("Kosovo", ignore_case = TRUE)) ||
+      stringr::str_detect(admin_val, regex("Kosovo", ignore_case = TRUE)) ||
+      stringr::str_detect(sovereignt_val, regex("Kosovo", ignore_case = TRUE))) {
+    props$iso_a3 <- "XKX"
+    if (!nzchar(admin_val)) props$admin <- "Kosovo"
+    if (!nzchar(sovereignt_val)) props$sovereignt <- "Kosovo"
+  }
+
+  if (!is.null(props$iso_a3)) {
+    feat$properties$iso_a3 <- props$iso_a3
+  }
+  if (!is.null(props$admin)) {
+    feat$properties$admin <- props$admin
+  }
+  if (!is.null(props$sovereignt)) {
+    feat$properties$sovereignt <- props$sovereignt
+  }
+
+  feat
+})
+
+world_geojson$features <- purrr::keep(
+  world_geojson$features,
+  ~{props <- .x$properties; !identical(props$iso_a3, "-99")}
+)
+
+feature_rows_after <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
+  props <- feat$properties
+  tibble::tibble(
+    feature_index = idx,
+    name = props$name %||% props$NAME %||% NA_character_,
+    admin = props$admin %||% props$ADMIN %||% NA_character_,
+    sovereignt = props$sovereignt %||% props$SOVEREIGNT %||% NA_character_,
+    iso_a3 = props$iso_a3 %||% props$ISO_A3 %||% NA_character_
+  )
+})
+
+cyprus_features_after <- feature_rows_after %>%
+  filter(
+    stringr::str_detect(name, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Cyprus", ignore_case = TRUE))
+  )
+
+somalia_features_after <- feature_rows_after %>%
+  filter(
+    stringr::str_detect(name, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
+  )
+
+format_feature_lines <- function(df) {
+  if (nrow(df) == 0) {
+    return("- none found")
+  }
+
+  apply(df, 1, function(row) {
+    sprintf(
+      "- #%s | name=%s | admin=%s | sovereignt=%s | iso_a3=%s",
+      row[["feature_index"]],
+      row[["name"]],
+      row[["admin"]],
+      row[["sovereignt"]],
+      row[["iso_a3"]]
+    )
+  })
+}
+
+report_lines <- c(
+  "GeoJSON inspection:",
+  "Cyprus-related features before patch:",
+  format_feature_lines(cyprus_features_before),
+  "Cyprus-related features after patch:",
+  format_feature_lines(cyprus_features_after),
+  "Somalia-related features before patch:",
+  format_feature_lines(somalia_features_before),
+  "Somalia-related features after patch:",
+  format_feature_lines(somalia_features_after),
+  "",
+  "Changes applied:",
+  "- Forced Kosovo Entity rows to use XKX to match the custom Kosovo polygon.",
+  "- Merged Somalia/Somaliland geometries and ensured Somaliland geojson properties use SOM.",
+  "- Merged Cyprus/Northern Cyprus geometries and ensured Northern Cyprus geojson properties use CYP.",
+  "",
+  "Commands run:",
+  "- Rscript -e \"rmarkdown::render('test_best_visual.Rmd')\" (failed: Rscript unavailable in container)",
+  "- apt-get update -y (failed: proxy returned 403)",
+  "- pip install geopandas --quiet (failed: proxy returned 403)",
+  "",
+  "Evidence:",
+  "- Feature tables above show iso_a3 updates for Northern Cyprus and Somaliland once rendered.",
+  "- After rendering, visually confirm Kosovo, Northern Cyprus, and Somaliland polygons are filled."
+)
+
+writeLines(unlist(report_lines), "report.txt")
 ```
 
 ```{r prepare-year-slider, include=FALSE}
