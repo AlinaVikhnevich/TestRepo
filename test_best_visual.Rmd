@@ -113,7 +113,13 @@ df <- df %>%
   ) %>%
   filter(!is.na(Code)) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
-  rename(life_expectancy = `Period life expectancy at birth`)
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  group_by(Code, Entity) %>%
+  arrange(Year, .by_group = TRUE) %>%
+  tidyr::complete(Year = seq(min(Year), max(Year), by = 1)) %>%
+  tidyr::fill(Entity, .direction = "downup") %>%
+  tidyr::fill(life_expectancy, .direction = "down") %>%
+  ungroup()
 ```
 
 ```{r load-shapefile, include=FALSE}
