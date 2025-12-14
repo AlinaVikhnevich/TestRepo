@@ -40,56 +40,15 @@ somaliland_name_match <- function(x) {
   stringr::str_detect(x, regex("Somaliland", ignore_case = TRUE))
 }
 
-somalia_union <- world_raw %>%
-  filter(somaliland_name_match(name) | name == "Somalia") %>%
-  mutate(iso_a3 = "SOM", name = "Somalia") %>%
-  group_by(iso_a3, name) %>%
-  summarise(geometry = sf::st_union(geometry), .groups = "drop")
-
-cyprus_union <- world_raw %>%
-  filter(cyprus_name_match(name)) %>%
-  mutate(iso_a3 = "CYP", name = "Cyprus") %>%
-  group_by(iso_a3, name) %>%
-  summarise(geometry = sf::st_union(geometry), .groups = "drop")
-
-world_countries <- world_raw %>%
-  filter(
-    !(name %in% c("Somalia", "Kosovo")) &
-      !somaliland_name_match(name) &
-      !cyprus_name_match(name)
-  ) %>%
+world <- world_raw %>%
   mutate(
     iso_a3 = case_when(
-      name == "France"                ~ "FRA",
-      name == "French Guiana"         ~ "GUF",
-      name == "Guadeloupe"            ~ "GLP",
-      name == "Martinique"            ~ "MTQ",
-      name == "Mayotte"               ~ "MYT",
-      name == "Reunion"               ~ "REU",
-      name == "Norway"                ~ "NOR",
-      name == "Svalbard and Jan Mayen"~ "SJM",
-      name == "Gibraltar"             ~ "GIB",
-      name == "Caribbean Netherlands" ~ "BES",
-      name == "Tokelau"               ~ "TKL",
+      cyprus_name_match(name)                    ~ "CYP",
+      somaliland_name_match(name)                ~ "SOM",
+      stringr::str_detect(name, regex("Kosovo", ignore_case = TRUE)) ~ "XKX",
       TRUE ~ iso_a3
     )
   ) %>%
-  select(iso_a3, name, geometry)
-
-world_countries <- bind_rows(world_countries, somalia_union, cyprus_union)
-
-admin1 <- rnaturalearth::ne_states(returnclass = "sf")
-
-kosovo_poly <- admin1 %>%
-  filter(geonunit == "Kosovo") %>%
-  summarise(geometry = sf::st_union(geometry)) %>%
-  mutate(
-    iso_a3 = "XKX",
-    name   = "Kosovo"
-  ) %>%
-  select(iso_a3, name, geometry)
-
-world <- bind_rows(world_countries, kosovo_poly) %>%
   mutate(
     iso_a3 = as.character(iso_a3),
     iso_a3 = stringr::str_trim(toupper(iso_a3))
