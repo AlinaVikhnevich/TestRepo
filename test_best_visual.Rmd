@@ -354,6 +354,7 @@ cat("\nTop codes in year data not found in GeoJSON iso_a3 (up to 30):\n")
 print(head(codes_missing_geo, 30))
 ```
 
+```{r diagnostics-geojson-summary, include=FALSE}
 cyprus_features_after <- feature_rows_after %>%
   filter(
     stringr::str_detect(name, regex("Cyprus", ignore_case = TRUE)) |
@@ -367,6 +368,7 @@ somalia_features_after <- feature_rows_after %>%
       stringr::str_detect(admin, regex("Somali", ignore_case = TRUE)) |
       stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
   )
+```
 
 ```{r diagnostics-report, include=FALSE}
 diagnostic_entities <- df %>%
