@@ -102,13 +102,14 @@ metadata <- fromJSON("life-expectancy.metadata.json")
 df <- df %>%
   mutate(
     Code = toupper(Code),
-    Code = case_when(
-      Code == "OWID_KOS" ~ "XKX",   # Kosovo
-      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
-      Entity == "Kosovo" ~ "XKX",
-      TRUE               ~ Code
+    Code = dplyr::case_when(
+      Entity == "Kosovo" & Code %in% c("OWID_KOS", "-99") ~ "XKX",
+      Entity == "Kosovo" & is.na(Code) ~ "XKX",
+      Code == "OWID_KOS" ~ "XKX",
+      Code == "SOL" ~ "SOM", # Somaliland merged into Somalia (defensive)
+      TRUE ~ Code
     ),
-    Code = if_else(str_detect(Code, "^[A-Z]{3}$"), Code, NA_character_)
+    Code = if_else(!is.na(Code) & str_detect(Code, "^[A-Z]{3}$"), Code, NA_character_)
   ) %>%
   filter(!is.na(Code)) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
@@ -234,13 +235,21 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
   admin_val <- props$admin %||% props$ADMIN %||% ""
   sovereignt_val <- props$sovereignt %||% props$SOVEREIGNT %||% ""
 
-  if (stringr::str_detect(name_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE))) {
+  if (
+    stringr::str_detect(name_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(admin_val, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt_val, regex("Cyprus", ignore_case = TRUE))
+  ) {
     props$iso_a3 <- "CYP"
     props$admin <- if (nzchar(admin_val)) admin_val else "Cyprus"
     props$sovereignt <- if (nzchar(sovereignt_val)) sovereignt_val else "Cyprus"
   }
 
-  if (stringr::str_detect(name_val, regex("Somaliland", ignore_case = TRUE))) {
+  if (
+    stringr::str_detect(name_val, regex("Somaliland", ignore_case = TRUE)) |
+      stringr::str_detect(admin_val, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt_val, regex("Somali", ignore_case = TRUE))
+  ) {
     props$iso_a3 <- "SOM"
     if (!nzchar(admin_val)) props$admin <- "Somalia"
     if (!nzchar(sovereignt_val)) props$sovereignt <- "Somalia"
@@ -269,7 +278,10 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
 
 world_geojson$features <- purrr::keep(
   world_geojson$features,
-  ~{props <- .x$properties; !identical(props$iso_a3, "-99")}
+  ~{
+    props <- .x$properties
+    !(is.null(props$iso_a3) || identical(props$iso_a3, "-99") || is.na(props$iso_a3))
+  }
 )
 
 feature_rows_after <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
@@ -296,6 +308,11 @@ somalia_features_after <- feature_rows_after %>%
       stringr::str_detect(admin, regex("Somali", ignore_case = TRUE)) |
       stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
   )
+
+diagnostic_entities <- df %>%
+  filter(!is.na(Entity) & Entity %in% c("Kosovo", "Cyprus", "Somalia")) %>%
+  distinct(Entity, Code) %>%
+  arrange(Entity, Code)
 
 format_feature_lines <- function(df) {
   if (nrow(df) == 0) {
@@ -325,15 +342,23 @@ report_lines <- c(
   "Somalia-related features after patch:",
   format_feature_lines(somalia_features_after),
   "",
+  "Data codes for key entities:",
+  apply(diagnostic_entities, 1, function(row) sprintf("- %s -> %s", row[["Entity"]], row[["Code"]])),
+  "",
+  "Feature counts (iso_a3):",
+  sprintf("- XKX: before=%s, after=%s", sum(feature_rows$iso_a3 == "XKX", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "XKX", na.rm = TRUE)),
+  sprintf("- CYP: before=%s, after=%s", sum(feature_rows$iso_a3 == "CYP", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "CYP", na.rm = TRUE)),
+  sprintf("- SOM: before=%s, after=%s", sum(feature_rows$iso_a3 == "SOM", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "SOM", na.rm = TRUE)),
+  sprintf("- -99: before=%s, after=%s", sum(feature_rows$iso_a3 == "-99", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "-99", na.rm = TRUE)),
+  "",
   "Changes applied:",
-  "- Forced Kosovo Entity rows to use XKX to match the custom Kosovo polygon.",
-  "- Merged Somalia/Somaliland geometries and ensured Somaliland geojson properties use SOM.",
-  "- Merged Cyprus/Northern Cyprus geometries and ensured Northern Cyprus geojson properties use CYP.",
+  "- Re-coded Kosovo data rows (OWID_KOS/-99/NA) to XKX before joining frames.",
+  "- Patched geojson properties so Northern Cyprus and Cyprus polygons both use CYP.",
+  "- Patched geojson properties so Somaliland and Somalia polygons both use SOM.",
+  "- Dropped only NA/-99 iso_a3 features after patching (custom XKX kept).",
   "",
   "Commands run:",
-  "- Rscript -e \"rmarkdown::render('test_best_visual.Rmd')\" (failed: Rscript unavailable in container)",
-  "- apt-get update -y (failed: proxy returned 403)",
-  "- pip install geopandas --quiet (failed: proxy returned 403)",
+  "- R -q -e 'rmarkdown::render(\"test_best_visual.Rmd\", output_file=\"__codex_check.html\")' (failed: R not installed in container)",
   "",
   "Evidence:",
   "- Feature tables above show iso_a3 updates for Northern Cyprus and Somaliland once rendered.",
