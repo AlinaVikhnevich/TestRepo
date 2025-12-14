@@ -104,9 +104,7 @@ df <- df %>%
     Code = case_when(
       Entity == "Kosovo" & Code %in% c("OWID_KOS", "-99") ~ "XKX",
       Entity == "Kosovo" & is.na(Code) ~ "XKX",
-      Code == "OWID_KOS" ~ "XKX",   # Kosovo
-      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
-      TRUE               ~ Code
+      TRUE ~ Code
     )
   ) %>%
   mutate(Code = stringr::str_trim(toupper(Code))) %>%
@@ -425,7 +423,7 @@ report_lines <- c(
   "- Re-coded Kosovo data rows (OWID_KOS/-99/NA) to XKX before joining frames.",
   "- Patched geojson properties so Northern Cyprus and Cyprus polygons both use CYP.",
   "- Patched geojson properties so Somaliland and Somalia polygons both use SOM.",
-  "- Dropped only NA/-99 iso_a3 features after patching (custom XKX kept).",
+  "- Kept all other features while trimming and uppercasing iso_a3 codes.",
   "",
   "Commands run:",
   "- R -q -e 'rmarkdown::render(\"test_best_visual.Rmd\", output_file=\"__codex_check.html\")' (failed: R not installed in container)",
@@ -899,34 +897,6 @@ income_frame_opts <- list(
   transition = list(duration = 0),
   mode = "immediate"
 )
-  income_payload <- list(
-  years = income_years,
-  values = income_year_values,
-  selected_year = selected_income_year,
-  speed_ms = income_speed_ms
-)
-
-income_payload <- list(
-  years = income_years,
-  values = income_year_values,
-  selected_year = selected_income_year,
-  speed_ms = income_speed_ms
-)
-
-income_payload <- list(
-  years = income_years,
-  values = income_year_values,
-  selected_year = selected_income_year,
-  speed_ms = income_speed_ms
-)
-
-income_payload <- list(
-  years = income_years,
-  values = income_year_values,
-  selected_year = selected_income_year,
-  speed_ms = income_speed_ms
-)
-
 income_payload <- list(
   years = income_years,
   values = income_year_values,

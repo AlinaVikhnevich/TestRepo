@@ -29,3 +29,4 @@ Then send me:
 
 Notes:
 - Please run the diagnostics via diagnostics.R; do not source test_best_visual.Rmd directly (it contains Markdown that source() cannot parse).
+- Data prep only recodes Kosovo (OWID_KOS/-99/NA) to XKX and leaves all other ISO codes unchanged.

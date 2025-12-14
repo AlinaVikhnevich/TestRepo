@@ -21,9 +21,7 @@ df <- df %>%
     Code = case_when(
       Entity == "Kosovo" & Code %in% c("OWID_KOS", "-99") ~ "XKX",
       Entity == "Kosovo" & is.na(Code) ~ "XKX",
-      Code == "OWID_KOS" ~ "XKX",   # Kosovo
-      Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
-      TRUE               ~ Code
+      TRUE ~ Code
     )
   ) %>%
   mutate(Code = stringr::str_trim(toupper(Code))) %>%
