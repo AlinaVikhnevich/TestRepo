@@ -101,14 +101,16 @@ metadata <- fromJSON("life-expectancy.metadata.json")
 
 df <- df %>%
   mutate(
+    Code = toupper(Code),
     Code = case_when(
       Code == "OWID_KOS" ~ "XKX",   # Kosovo
       Code == "SOL"      ~ "SOM",   # Somaliland merged into Somalia
       Entity == "Kosovo" ~ "XKX",
       TRUE               ~ Code
-    )
+    ),
+    Code = if_else(str_detect(Code, "^[A-Z]{3}$"), Code, NA_character_)
   ) %>%
-  filter(str_detect(Code, "^[A-Z]{3}$")) %>%   # keep only ISO-like codes (3 letters)
+  filter(!is.na(Code)) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
   rename(life_expectancy = `Period life expectancy at birth`)
 ```
@@ -186,6 +188,7 @@ kosovo_poly <- admin1 %>%
 
 world <- bind_rows(world_countries, kosovo_poly)
 world <- world %>%
+  mutate(iso_a3 = as.character(iso_a3)) %>%
   filter(!is.na(iso_a3) & iso_a3 != "-99")
 ```
 
@@ -243,6 +246,14 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
     if (!nzchar(sovereignt_val)) props$sovereignt <- "Somalia"
   }
 
+  if (stringr::str_detect(name_val, regex("Kosovo", ignore_case = TRUE)) ||
+      stringr::str_detect(admin_val, regex("Kosovo", ignore_case = TRUE)) ||
+      stringr::str_detect(sovereignt_val, regex("Kosovo", ignore_case = TRUE))) {
+    props$iso_a3 <- "XKX"
+    if (!nzchar(admin_val)) props$admin <- "Kosovo"
+    if (!nzchar(sovereignt_val)) props$sovereignt <- "Kosovo"
+  }
+
   if (!is.null(props$iso_a3)) {
     feat$properties$iso_a3 <- props$iso_a3
   }
@@ -255,6 +266,11 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
 
   feat
 })
+
+world_geojson$features <- purrr::keep(
+  world_geojson$features,
+  ~{props <- .x$properties; !identical(props$iso_a3, "-99")}
+)
 
 feature_rows_after <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
   props <- feat$properties
