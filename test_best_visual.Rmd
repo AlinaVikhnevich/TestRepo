@@ -189,8 +189,11 @@ kosovo_poly <- admin1 %>%
 
 world <- bind_rows(world_countries, kosovo_poly)
 world <- world %>%
-  mutate(iso_a3 = as.character(iso_a3)) %>%
-  filter(!is.na(iso_a3) & iso_a3 != "-99")
+  mutate(
+    iso_a3 = as.character(iso_a3),
+    iso_a3 = stringr::str_trim(toupper(iso_a3))
+  ) %>%
+  filter(!is.na(iso_a3) & iso_a3 != "-99" & iso_a3 != "")
 ```
 
 ```{r merge-data, include=FALSE}
@@ -264,7 +267,7 @@ world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
   }
 
   if (!is.null(props$iso_a3)) {
-    feat$properties$iso_a3 <- props$iso_a3
+    feat$properties$iso_a3 <- stringr::str_trim(toupper(props$iso_a3))
   }
   if (!is.null(props$admin)) {
     feat$properties$admin <- props$admin
