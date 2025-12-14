@@ -1,0 +1,31 @@
+LOCAL TESTS TO RUN (Mac / RStudio Terminal)
+
+1) Render the HTML
+R -q -e "rmarkdown::render('test_best_visual.Rmd', output_file='__local_check.html')"
+
+2) Run diagnostics (copy/paste into R console)
+R -q -e "source('diagnostics.R')"
+
+3) Expected diagnostic outputs to paste back to Codex
+- GeoJSON feature counts:
+  - XKX = ?
+  - CYP = ?
+  - SOM = ?
+  - -99 = ?
+- Print the Northern Cyprus feature row(s) showing iso_a3 is CYP after patch
+- Print the Somaliland feature row(s) showing iso_a3 is SOM after patch
+- Print Kosovo rows from get_year_data(2023): Code should be XKX and not -99/OWID_KOS
+ - Print top 30 Codes in year data not found in GeoJSON iso_a3
+
+4) Visual check
+Open __local_check.html and confirm:
+- Kosovo is visible and filled when adjacent countries are filled
+- Northern Cyprus area is filled (not blank)
+- Somaliland area is filled (not blank)
+Then send me:
+- A screenshot of the map at year 2023
+- A screenshot zoomed near Cyprus
+- A screenshot zoomed near Somalia/Somaliland
+
+Notes:
+- Please run the diagnostics via diagnostics.R; do not source test_best_visual.Rmd directly (it contains Markdown that source() cannot parse).
