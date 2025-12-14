@@ -368,6 +368,7 @@ somalia_features_after <- feature_rows_after %>%
       stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
   )
 
+```{r diagnostics-report, include=FALSE}
 diagnostic_entities <- df %>%
   filter(!is.na(Entity) & Entity %in% c("Kosovo", "Cyprus", "Somalia")) %>%
   distinct(Entity, Code) %>%
