@@ -109,9 +109,15 @@ df <- df %>%
       TRUE               ~ Code
     )
   ) %>%
-  filter(str_detect(Code, "^[A-Z]{3}$")) %>%   # keep only ISO-like codes (3 letters)
+  filter(!is.na(Code)) %>%
   select(Entity, Code, Year, `Period life expectancy at birth`) %>%
-  rename(life_expectancy = `Period life expectancy at birth`)
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  group_by(Code, Entity) %>%
+  arrange(Year, .by_group = TRUE) %>%
+  tidyr::complete(Year = seq(min(Year), max(Year), by = 1)) %>%
+  tidyr::fill(Entity, .direction = "downup") %>%
+  tidyr::fill(life_expectancy, .direction = "down") %>%
+  ungroup()
 ```
 
 ```{r load-shapefile, include=FALSE}
@@ -119,23 +125,35 @@ df <- df %>%
 # Base countries from Natural Earth
 world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
 
+cyprus_name_match <- function(x) {
+  stringr::str_detect(x, regex("^Cyprus$|^N\\.?\\s*Cyprus$|^Northern Cyprus$", ignore_case = TRUE))
+}
+
+somaliland_name_match <- function(x) {
+  stringr::str_detect(x, regex("Somaliland", ignore_case = TRUE))
+}
+
 # Union Somalia + Somaliland into one Somalia polygon
 somalia_union <- world_raw %>%
-  filter(name %in% c("Somalia", "Somaliland")) %>%
+  filter(somaliland_name_match(name) | name == "Somalia") %>%
   mutate(iso_a3 = "SOM", name = "Somalia") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
 
 # Union Cyprus + N. Cyprus into one Cyprus polygon
 cyprus_union <- world_raw %>%
-  filter(name %in% c("Cyprus", "N. Cyprus")) %>%
+  filter(cyprus_name_match(name)) %>%
   mutate(iso_a3 = "CYP", name = "Cyprus") %>%
   group_by(iso_a3, name) %>%
   summarise(geometry = sf::st_union(geometry), .groups = "drop")
 
 # Remove the pieces we are replacing and fix some ISO codes
 world_countries <- world_raw %>%
-  filter(!name %in% c("Somalia", "Somaliland", "Cyprus", "N. Cyprus")) %>%
+  filter(
+    !(name %in% c("Somalia", "Kosovo")) &
+      !somaliland_name_match(name) &
+      !cyprus_name_match(name)
+  ) %>%
   mutate(
     iso_a3 = case_when(
       # France + territories
@@ -174,6 +192,12 @@ kosovo_poly <- admin1 %>%
   select(iso_a3, name, geometry)
 
 world <- bind_rows(world_countries, kosovo_poly)
+world <- world %>%
+  mutate(
+    iso_a3 = as.character(iso_a3),
+    iso_a3 = stringr::str_trim(toupper(iso_a3))
+  ) %>%
+  filter(!is.na(iso_a3) & iso_a3 != "-99" & iso_a3 != "")
 ```
 
 ```{r merge-data, include=FALSE}
