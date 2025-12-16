@@ -1,0 +1,1387 @@
+---
+title: "DATA 621 Final: Life Expectancy"
+author: "Alina Vikhnevich"
+date: "December 10, 2025"
+output: html_document
+---
+
+```{css, echo=FALSE}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 18px;
+
+  background-image: url('https://images.pexels.com/photos/235985/pexels-photo-235985.jpeg');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  color: #1f2933;
+}
+
+.main-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.visual-section .html-widget {
+  width: 100% !important;
+  position: relative !important;
+  display: block;
+  min-height: 860px;
+}
+
+h1.title {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 30px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.2;
+}
+
+h4.author, h4.date {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 16px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.1;
+}
+
+#map-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 120px; /* gives room for the map slider/buttons below */
+}
+```
+# Core Research Question
+
+How has life expectancy evolved across countries over time, and to what extent do countries differ in their baseline levels and long-run trajectories?
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r load-libraries, include=FALSE}
+library(tidyverse)
+library(readr)
+library(jsonlite)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(plotly)
+library(viridis)
+library(htmltools)
+library(dplyr)
+
+`%||%` <- function(x, y) {
+  if (is.null(x) || (is.character(x) && all(is.na(x)))) {
+    return(y)
+  }
+  x
+}
+```
+
+```{r import-data, include=FALSE}
+df <- read_csv("life-expectancy.csv")
+metadata <- fromJSON("life-expectancy.metadata.json")
+
+df <- df %>%
+  mutate(
+    Code = toupper(Code),
+    Code = dplyr::case_when(
+      Entity == "Kosovo" & Code %in% c("OWID_KOS", "-99") ~ "XKX",
+      Entity == "Kosovo" & is.na(Code) ~ "XKX",
+      Code == "OWID_KOS" ~ "XKX",
+      Code == "SOL" ~ "SOM", # Somaliland merged into Somalia (defensive)
+      TRUE ~ Code
+    ),
+    Code = if_else(!is.na(Code) & str_detect(Code, "^[A-Z]{3}$"), Code, NA_character_)
+  ) %>%
+  filter(!is.na(Code)) %>%
+  select(Entity, Code, Year, `Period life expectancy at birth`) %>%
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  group_by(Code, Entity) %>%
+  arrange(Year, .by_group = TRUE) %>%
+  tidyr::complete(Year = seq(min(Year), max(Year), by = 1)) %>%
+  tidyr::fill(Entity, .direction = "downup") %>%
+  tidyr::fill(life_expectancy, .direction = "down") %>%
+  ungroup()
+```
+
+```{r load-shapefile, include=FALSE}
+# Load base Natural Earth country polygons
+# Base countries from Natural Earth
+world_raw <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+
+cyprus_name_match <- function(x) {
+  stringr::str_detect(x, regex("^Cyprus$|^N\\.?\\s*Cyprus$|^Northern Cyprus$", ignore_case = TRUE))
+}
+
+somaliland_name_match <- function(x) {
+  stringr::str_detect(x, regex("Somaliland", ignore_case = TRUE))
+}
+
+# Union Somalia + Somaliland into one Somalia polygon
+somalia_union <- world_raw %>%
+  filter(somaliland_name_match(name) | name == "Somalia") %>%
+  mutate(iso_a3 = "SOM", name = "Somalia") %>%
+  group_by(iso_a3, name) %>%
+  summarise(geometry = sf::st_union(geometry), .groups = "drop")
+
+# Union Cyprus + N. Cyprus into one Cyprus polygon
+cyprus_union <- world_raw %>%
+  filter(cyprus_name_match(name)) %>%
+  mutate(iso_a3 = "CYP", name = "Cyprus") %>%
+  group_by(iso_a3, name) %>%
+  summarise(geometry = sf::st_union(geometry), .groups = "drop")
+
+# Remove the pieces we are replacing and fix some ISO codes
+world_countries <- world_raw %>%
+  filter(
+    !(name %in% c("Somalia", "Kosovo")) &
+      !somaliland_name_match(name) &
+      !cyprus_name_match(name)
+  ) %>%
+  mutate(
+    iso_a3 = case_when(
+      # France + territories
+      name == "France"                ~ "FRA",
+      name == "French Guiana"         ~ "GUF",
+      name == "Guadeloupe"            ~ "GLP",
+      name == "Martinique"            ~ "MTQ",
+      name == "Mayotte"               ~ "MYT",
+      name == "Reunion"               ~ "REU",
+
+      # Norway + territories
+      name == "Norway"                ~ "NOR",
+      name == "Svalbard and Jan Mayen"~ "SJM",
+
+      # Gibraltar, BES, Tokelau
+      name == "Gibraltar"             ~ "GIB",
+      name == "Caribbean Netherlands" ~ "BES",
+      name == "Tokelau"               ~ "TKL",
+
+      TRUE ~ iso_a3
+    )
+  ) %>%
+  select(iso_a3, name, geometry)
+
+world_countries <- bind_rows(world_countries, somalia_union, cyprus_union)
+
+admin1 <- rnaturalearth::ne_states(returnclass = "sf")
+
+kosovo_poly <- admin1 %>%
+  filter(geonunit == "Kosovo") %>%
+  summarise(geometry = sf::st_union(geometry)) %>%
+  mutate(
+    iso_a3 = "XKX",
+    name   = "Kosovo"
+  ) %>%
+  select(iso_a3, name, geometry)
+
+world <- bind_rows(world_countries, kosovo_poly)
+world <- world %>%
+  mutate(
+    iso_a3 = as.character(iso_a3),
+    iso_a3 = stringr::str_trim(toupper(iso_a3))
+  ) %>%
+  filter(!is.na(iso_a3) & iso_a3 != "-99" & iso_a3 != "")
+```
+
+```{r merge-data, include=FALSE}
+map_df <- world %>%
+  left_join(df, by = c("iso_a3" = "Code")) %>%
+  filter(!is.na(geometry), !is.na(Year))
+```
+
+```{r geojson}
+tmp_geojson <- tempfile(fileext = ".geojson")
+sf::st_write(world, tmp_geojson, driver = "GeoJSON", quiet = TRUE)
+world_geojson <- jsonlite::read_json(tmp_geojson, simplifyVector = FALSE)
+
+feature_rows <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
+  props <- feat$properties
+  tibble::tibble(
+    feature_index = idx,
+    name = props$name %||% props$NAME %||% NA_character_,
+    admin = props$admin %||% props$ADMIN %||% NA_character_,
+    sovereignt = props$sovereignt %||% props$SOVEREIGNT %||% NA_character_,
+    iso_a3 = props$iso_a3 %||% props$ISO_A3 %||% NA_character_
+  )
+})
+
+cyprus_features_before <- feature_rows %>%
+  filter(
+    stringr::str_detect(name, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Cyprus", ignore_case = TRUE))
+  )
+
+somalia_features_before <- feature_rows %>%
+  filter(
+    stringr::str_detect(name, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
+  )
+
+world_geojson$features <- purrr::map(world_geojson$features, function(feat) {
+  props <- feat$properties
+  name_val <- props$name %||% props$NAME %||% ""
+  admin_val <- props$admin %||% props$ADMIN %||% ""
+  sovereignt_val <- props$sovereignt %||% props$SOVEREIGNT %||% ""
+
+  if (
+    stringr::str_detect(name_val, regex("N\\.?\\s*Cyprus|Northern Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(admin_val, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt_val, regex("Cyprus", ignore_case = TRUE))
+  ) {
+    props$iso_a3 <- "CYP"
+    props$admin <- if (nzchar(admin_val)) admin_val else "Cyprus"
+    props$sovereignt <- if (nzchar(sovereignt_val)) sovereignt_val else "Cyprus"
+  }
+
+  if (
+    stringr::str_detect(name_val, regex("Somaliland", ignore_case = TRUE)) |
+      stringr::str_detect(admin_val, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt_val, regex("Somali", ignore_case = TRUE))
+  ) {
+    props$iso_a3 <- "SOM"
+    if (!nzchar(admin_val)) props$admin <- "Somalia"
+    if (!nzchar(sovereignt_val)) props$sovereignt <- "Somalia"
+  }
+
+  if (stringr::str_detect(name_val, regex("Kosovo", ignore_case = TRUE)) ||
+      stringr::str_detect(admin_val, regex("Kosovo", ignore_case = TRUE)) ||
+      stringr::str_detect(sovereignt_val, regex("Kosovo", ignore_case = TRUE))) {
+    props$iso_a3 <- "XKX"
+    if (!nzchar(admin_val)) props$admin <- "Kosovo"
+    if (!nzchar(sovereignt_val)) props$sovereignt <- "Kosovo"
+  }
+
+  if (!is.null(props$iso_a3)) {
+    feat$properties$iso_a3 <- stringr::str_trim(toupper(props$iso_a3))
+  }
+  if (!is.null(props$admin)) {
+    feat$properties$admin <- props$admin
+  }
+  if (!is.null(props$sovereignt)) {
+    feat$properties$sovereignt <- props$sovereignt
+  }
+
+  feat
+})
+
+world_geojson$features <- purrr::keep(
+  world_geojson$features,
+  ~{
+    props <- .x$properties
+    !(is.null(props$iso_a3) || identical(props$iso_a3, "-99") || is.na(props$iso_a3))
+  }
+)
+
+feature_rows_after <- purrr::imap_dfr(world_geojson$features, function(feat, idx) {
+  props <- feat$properties
+  tibble::tibble(
+    feature_index = idx,
+    name = props$name %||% props$NAME %||% NA_character_,
+    admin = props$admin %||% props$ADMIN %||% NA_character_,
+    sovereignt = props$sovereignt %||% props$SOVEREIGNT %||% NA_character_,
+    iso_a3 = props$iso_a3 %||% props$ISO_A3 %||% NA_character_
+  )
+})
+
+cyprus_features_after <- feature_rows_after %>%
+  filter(
+    stringr::str_detect(name, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Cyprus", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Cyprus", ignore_case = TRUE))
+  )
+
+somalia_features_after <- feature_rows_after %>%
+  filter(
+    stringr::str_detect(name, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(admin, regex("Somali", ignore_case = TRUE)) |
+      stringr::str_detect(sovereignt, regex("Somali", ignore_case = TRUE))
+  )
+
+diagnostic_entities <- df %>%
+  filter(!is.na(Entity) & Entity %in% c("Kosovo", "Cyprus", "Somalia")) %>%
+  distinct(Entity, Code) %>%
+  arrange(Entity, Code)
+
+format_feature_lines <- function(df) {
+  if (nrow(df) == 0) {
+    return("- none found")
+  }
+
+  apply(df, 1, function(row) {
+    sprintf(
+      "- #%s | name=%s | admin=%s | sovereignt=%s | iso_a3=%s",
+      row[["feature_index"]],
+      row[["name"]],
+      row[["admin"]],
+      row[["sovereignt"]],
+      row[["iso_a3"]]
+    )
+  })
+}
+
+report_lines <- c(
+  "GeoJSON inspection:",
+  "Cyprus-related features before patch:",
+  format_feature_lines(cyprus_features_before),
+  "Cyprus-related features after patch:",
+  format_feature_lines(cyprus_features_after),
+  "Somalia-related features before patch:",
+  format_feature_lines(somalia_features_before),
+  "Somalia-related features after patch:",
+  format_feature_lines(somalia_features_after),
+  "",
+  "Data codes for key entities:",
+  apply(diagnostic_entities, 1, function(row) sprintf("- %s -> %s", row[["Entity"]], row[["Code"]])),
+  "",
+  "Feature counts (iso_a3):",
+  sprintf("- XKX: before=%s, after=%s", sum(feature_rows$iso_a3 == "XKX", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "XKX", na.rm = TRUE)),
+  sprintf("- CYP: before=%s, after=%s", sum(feature_rows$iso_a3 == "CYP", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "CYP", na.rm = TRUE)),
+  sprintf("- SOM: before=%s, after=%s", sum(feature_rows$iso_a3 == "SOM", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "SOM", na.rm = TRUE)),
+  sprintf("- -99: before=%s, after=%s", sum(feature_rows$iso_a3 == "-99", na.rm = TRUE), sum(feature_rows_after$iso_a3 == "-99", na.rm = TRUE)),
+  "",
+  "Changes applied:",
+  "- Re-coded Kosovo data rows (OWID_KOS/-99/NA) to XKX before joining frames.",
+  "- Patched geojson properties so Northern Cyprus and Cyprus polygons both use CYP.",
+  "- Patched geojson properties so Somaliland and Somalia polygons both use SOM.",
+  "- Dropped only NA/-99 iso_a3 features after patching (custom XKX kept).",
+  "",
+  "Commands run:",
+  "- R -q -e 'rmarkdown::render(\"test_best_visual.Rmd\", output_file=\"__codex_check.html\")' (failed: R not installed in container)",
+  "",
+  "Evidence:",
+  "- Feature tables above show iso_a3 updates for Northern Cyprus and Somaliland once rendered.",
+  "- After rendering, visually confirm Kosovo, Northern Cyprus, and Somaliland polygons are filled."
+)
+
+writeLines(unlist(report_lines), "report.txt")
+```
+
+```{r prepare-year-slider, include=FALSE}
+years_available <- sort(unique(map_df$Year))
+map_data <- map_df
+
+coverage_year <- df %>%
+  group_by(Year) %>%
+  summarise(count = sum(!is.na(life_expectancy)), .groups = "drop") %>%
+  filter(count == max(count)) %>%
+  summarise(selected = max(Year)) %>%
+  pull(selected)
+```
+
+```{r life-expectancy-map}
+map_locations <- world %>%
+  sf::st_drop_geometry() %>%
+  select(iso_a3, name) %>%
+  arrange(iso_a3)
+
+get_year_data <- function(y) {
+  year_values <- df %>%
+    filter(Year == y) %>%
+    select(Code, life_expectancy)
+
+  map_locations %>%
+    left_join(year_values, by = c("iso_a3" = "Code")) %>%
+    rename(Entity = name, Code = iso_a3) %>%
+    mutate(Year = y)
+}
+
+map_year_values <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+  list(
+    locations = year_df$Code,
+    z = year_df$life_expectancy,
+    text = year_df$Entity,
+    customdata = year_df$Year
+  )
+})
+
+selected_year <- coverage_year
+plot_df <- get_year_data(selected_year)
+
+fig <- plot_ly()
+
+# Static outline trace so country borders stay visible even when a year has no data
+fig <- fig %>%
+  add_trace(
+    type = "choropleth",
+    geojson = world_geojson,
+    locations = map_locations$iso_a3,
+    z = rep(0, nrow(map_locations)),
+    featureidkey = "properties.iso_a3",
+    colorscale = list(
+      c(0, "rgba(0,0,0,0)"),
+      c(1, "rgba(0,0,0,0)")
+    ),
+    showscale = FALSE,
+    marker = list(
+      line = list(color = "#422E12", width = 0.8)
+    ),
+    hoverinfo = "skip"
+  )
+
+# Data trace that is restyled during playback
+fig <- fig %>%
+  add_trace(
+    data = plot_df,
+    type = "choropleth",
+    geojson = world_geojson,
+    locations = ~Code,
+    z = ~life_expectancy,
+    locationmode = "ISO-3",
+    featureidkey = "properties.iso_a3",
+    text = ~Entity,
+    customdata = ~Year,
+    colorscale = list(
+      c(0.00, "#4B3F52"),
+      c(0.10, "#6E5248"),
+      c(0.20, "#855358"),
+      c(0.30, "#9E5469"),
+      c(0.40, "#BD6262"),
+      c(0.50, "#D6795C"),
+      c(0.60, "#DBA97B"),
+      c(0.70, "#E8DB74"),
+      c(0.80, "#B5BA4E"),
+      c(0.90, "#8E9842"),
+      c(1.00, "#74852A")
+    ),
+    zmin = 30,
+    zmax = 85,
+    colorbar = list(
+      orientation = "h",
+      title = list(
+        text = "",
+        side = "bottom",
+        font = list(size = 16, color = "#1f2933", family = "Cormorant Garamond, serif")
+      ),
+      len = 0.90,
+      thickness = 10,
+      x = 0.5,
+      xanchor = "center",
+      y = -0.1,
+      tickcolor = "#1f2933",
+      tickfont = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 20),
+      bgcolor = "rgba(0,0,0,0)"
+    ),
+    marker = list(
+      line = list(
+        color = "#4A3C30",   # Dark brown outline
+        width = 0.4          # Thickness
+      )
+    ),
+    hovertemplate = paste0(
+      "<b>%{text}</b><br>",
+      "Year: %{customdata}<br>",
+      "Life Expectancy: %{z:.1f}<extra></extra>"
+
+    )
+  )
+
+map_speed_ms <- 140
+
+map_steps <- lapply(years_available, function(y) {
+  year_df <- get_year_data(y)
+
+  list(
+    label = y,
+    method = "restyle",
+    args = list(
+      list(
+        locations  = list(year_df$Code),
+        z          = list(year_df$life_expectancy),
+        text       = list(year_df$Entity),
+        customdata = list(year_df$Year)
+      ),
+      list(1)
+    )
+  )
+})
+
+map_buttons <- list(
+  list(label = "Play", method = "relayout", args = list(list())),
+  list(label = "Pause", method = "relayout", args = list(list()))
+)
+
+active_index <- which(years_available == selected_year)
+slider_active <- if (length(active_index) == 0) length(years_available) - 1 else active_index - 1
+map_speed_ms <- 140
+map_payload <- list(
+  years = years_available,
+  values = map_year_values,
+  selected_year = selected_year,
+  speed_ms = map_speed_ms
+)
+
+fig <- fig %>% layout(
+  title = list(
+    text = "<b>Life Expectancy by Country (1543 - 2023)</b>",
+    x = 0.5,
+    xanchor = "center",
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 33,
+      color = "#1f2933"
+    )
+  ),
+  font = list(
+    family = "Cormorant Garamond, serif",
+    size = 16,
+    color = "#1f2933"
+  ),
+  hoverlabel = list(
+    bgcolor = "#E0D7C5",        # Hover background color
+    bordercolor = "#8A623A",    # Hover border color
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 16,
+      color = "#1f2933"         # Hover text color
+    ),
+    namelength = -1,
+    align = "left"
+  ),
+  geo = list(
+    projection = list(type = "natural earth"),
+    showframe = FALSE,
+    showcoastlines = FALSE,
+    showlakes = FALSE,
+    showcountries = FALSE,
+    landcolor = "#E0D7C5",
+    bgcolor = "rgba(0,0,0,0)",
+    showgrid = TRUE,
+    gridcolor = "#422E12",
+    gridwidth = 0.3,
+    lataxis = list(
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3,
+      range = c(-60, 85)
+    ),
+    lonaxis = list(
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3,
+      range = c(-180, 180)
+    )
+  ),
+  annotations = list(
+    list(
+      text = "<b>Life Expectancy in Years</b>",
+      x = 0.5,
+      y = -0.11,
+      xref = "paper",
+      yref = "paper",
+      showarrow = FALSE,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 22,
+        color = "#1f2933"
+      )
+    )
+  ),
+  sliders = list(list(
+    active = slider_active,
+    currentvalue = list(
+      prefix = "<b>Calendar Year: </b>",
+      x = 0.5,               # Centers the label
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 22,           # Larger text
+        color = "#1f2933"
+      )
+    ),
+    len = 0.83,
+    x = 0.12,
+    y = -0.12,
+    pad = list(t = 30),
+    steps = map_steps,
+    bgcolor = "#8A623A",
+    bordercolor = "#E0D7C5",
+    font = list(color = "#1f2933", family = "Cormorant Garamond, serif", size = 18)
+  )),
+  updatemenus = list(list(
+    type = "buttons",
+    showactive = FALSE,
+    direction = "right",
+    x = 0.035,
+    y = -0.17,
+    xanchor = "left",
+    yanchor = "top",
+    pad = list(t = 30),
+    buttons = map_buttons,
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 18,
+      color = "#E0D7C5"
+    ),
+    bgcolor = "#8A623A",
+    bordercolor = "#E0D7C5"
+  )),
+  margin = list(
+    l = 20, r = 20, t = 80, b = 200
+  ),
+  width = 1500,
+  height = 850,
+  paper_bgcolor = "rgba(0,0,0,0)",
+  plot_bgcolor = "rgba(0,0,0,0)",
+  dragmode = "zoom"
+) %>%
+  config(scrollZoom = TRUE)
+
+map_js <- sprintf(
+  "function(el, x) {
+    const payload = %s;
+    const years = payload.years;
+    const values = payload.values;
+    const speed = payload.speed_ms;
+    let timer = null;
+
+    const findIndex = (stepLabel) => years.findIndex((y) => String(y) === String(stepLabel));
+
+    const setYear = (idx) => {
+      if (idx < 0 || idx >= years.length) return;
+      const entry = values[idx];
+      Plotly.restyle(
+        el,
+        {
+          locations: [entry.locations],
+          z: [entry.z],
+          text: [entry.text],
+          customdata: [entry.customdata]
+        },
+        [1]
+      );
+      Plotly.relayout(el, { 'sliders[0].active': idx });
+    };
+
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const play = () => {
+      stop();
+      let idx = 0;
+      setYear(idx);
+      timer = setInterval(() => {
+        idx += 1;
+        if (idx >= years.length) {
+          stop();
+          return;
+        }
+        setYear(idx);
+      }, speed);
+    };
+
+    const startIndex = findIndex(payload.selected_year);
+    if (startIndex >= 0) {
+      setYear(startIndex);
+    }
+
+    el.on('plotly_sliderchange', (e) => {
+      stop();
+      const idx = findIndex(e.step.label);
+      if (idx >= 0) {
+        setYear(idx);
+      }
+    });
+
+    el.on('plotly_buttonclicked', (e) => {
+      const label = e?.button?.label;
+      if (label === 'Play') {
+        play();
+      } else if (label === 'Pause') {
+        stop();
+      }
+    });
+  }",
+  jsonlite::toJSON(map_payload, auto_unbox = TRUE)
+)
+
+fig <- htmlwidgets::onRender(fig, map_js)
+
+htmltools::div(
+  class = "visual-section",
+  id = "map-wrapper",
+  fig
+)
+```
+
+```{r income-bar-chart}
+income_groups <- c(
+  "High-income countries",
+  "High-and-upper-middle-income countries",
+  "Upper-middle-income countries",
+  "Middle-income countries",
+  "Low-and-middle-income countries",
+  "Lower-middle-income countries",
+  "Low-and-Lower-middle-income countries",
+  "Low-income countries"
+)
+
+income_df <- read_csv(
+  "life-expectancy.csv"
+) %>%
+  filter(Entity %in% income_groups, Year >= 1950) %>%
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  mutate(
+    Entity = factor(Entity, levels = rev(income_groups))
+  )
+
+get_income_year <- function(y) {
+  income_df %>%
+    filter(Year == y) %>%
+    arrange(life_expectancy)
+}
+
+income_years <- sort(unique(income_df$Year))
+selected_income_year <- max(income_years)
+bar_df <- get_income_year(selected_income_year)
+
+income_year_values <- lapply(income_years, function(y) {
+  df_y <- get_income_year(y)
+  list(
+    x = df_y$life_expectancy,
+    y = df_y$Entity,
+    text = df_y$Entity,
+    customdata = df_y$Year
+  )
+})
+
+fig_income <- plot_ly(
+  data = bar_df,
+  type = "bar",
+  orientation = "h",
+  opacity = 0.62,
+
+  x = ~life_expectancy,
+  y = ~Entity,
+
+  # INSIDE BAR LABELS (income groups)
+    text = ~Entity,
+    textposition = "inside",
+    insidetextanchor = "right",
+    
+    textfont = list(
+      family = "Cormorant Garamond, serif",
+      size = 20,
+      color = "#1f2933"
+    ),
+
+  # HORIZONTAL GRADIENT BAR
+  marker = list(
+    color = ~life_expectancy,
+      colorscale = list(
+        c(0.00, "#52396E"),
+        c(0.15, "#9C3E59"),
+        c(0.30, "#BD6262"),
+        c(0.45, "#D6795C"),
+        c(0.60, "#DBA97B"),
+        c(0.74, "#E8DB74"),
+        c(0.88, "#B5BA4E"),
+        c(1.00, "#74852A")
+      ),
+    line = list(color = "rgba(66,46,18,0.55)", width = 0.8)
+  ),
+
+  customdata = ~Year,
+  hovertemplate = paste0(
+    "<b>%{y}</b><br>",
+    "Calendar Year: %{customdata}<br>",
+    "Life Expectancy: %{x:.1f} years<extra></extra>"
+  )
+)
+
+income_frames <- lapply(income_years, function(y) {
+  df_y <- get_income_year(y)
+  list(
+    name = as.character(y),
+    data = list(
+      list(
+        x = df_y$life_expectancy,
+        y = df_y$Entity,
+        text = df_y$Entity,
+        customdata = df_y$Year
+      )
+    )
+  )
+})
+fig_income$x$frames <- income_frames
+
+# Animation speed constant (ms per frame)
+income_speed_ms <- 260
+income_frame_opts <- list(
+  frame = list(duration = income_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+  income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_payload <- list(
+  years = income_years,
+  values = income_year_values,
+  selected_year = selected_income_year,
+  speed_ms = income_speed_ms
+)
+
+income_steps <- lapply(income_years, function(y) {
+  list(
+    label = as.character(y),
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      income_frame_opts
+    )
+  )
+})
+
+income_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = income_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
+
+fig_income <- fig_income %>%
+  layout(
+    title = list(
+      text = "<b>Life Expectancy by Income Group (1950 - 2023)</b>",
+      x = 0.5,
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 33,
+        color = "#1f2933"
+      )
+    ),
+    font = list(
+      family = "Cormorant Garamond, serif",
+      size = 18,
+      color = "#1f2933"
+    ),
+
+    # REMOVE LEFT-SIDE LABELS COMPLETELY 
+    yaxis = list(
+      title = "<b>Income Groups</b>",
+       font = list(
+        family = "Cormorant Garamond, serif",
+        size = 28,
+        color = "#1f2933"),
+      showticklabels = FALSE
+    ),
+
+    xaxis = list(
+      title = list(
+        text = "<b>Life Expectancy in Years</b>",
+        standoff = 8,
+        font = list(
+          family = "Cormorant Garamond, serif",
+          size = 22,
+          color = "#1f2933"
+        )
+      ),
+      range = c(20, 85),
+      zeroline = FALSE,
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3
+    ),
+
+    hoverlabel = list(
+      bgcolor = "#E0D7C5",
+      bordercolor = "#8A623A",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 16,
+        color = "#1f2933"
+      )
+    ),
+
+    sliders = list(list(
+      active = length(income_years) - 1,
+      currentvalue = list(
+        prefix = "<b>Calendar Year: </b>",
+        x = 0.5,
+        xanchor = "center",
+        font = list(
+          family = "Cormorant Garamond, serif",
+          size = 22,
+          color = "#1f2933"
+        )
+      ),
+      len = 0.86,
+      x = 0.08,
+      y = -0.08,
+      pad = list(t = 30),
+      steps = income_steps,
+      bgcolor = "#8A623A",
+      bordercolor = "#E0D7C5",
+      font = list(
+        color = "#1f2933",
+        family = "Cormorant Garamond, serif",
+        size = 20
+      )
+    )),
+    updatemenus = list(list(
+      type = "buttons",
+      showactive = FALSE,
+      direction = "right",
+      x = -0.01,
+      y = -0.14,
+      xanchor = "left",
+      yanchor = "top",
+      pad = list(t = 30),
+      buttons = income_buttons,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#E0D7C5"
+      ),
+      bgcolor = "#8A623A",
+      bordercolor = "#E0D7C5"
+    )),
+
+    margin = list(
+      l = 80, r = 40, t = 80, b = 140
+    ),
+    
+    width = 1500,
+    height = 750,
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
+  )
+
+income_js <- sprintf(
+  "function(el, x) {\n    const payload = %s;\n    const years = payload.years;\n    const values = payload.values;\n    const speed = payload.speed_ms;\n    let timer = null;\n\n    const findIndex = (label) => years.findIndex((y) => String(y) === String(label));\n\n    const setYear = (idx) => {\n      if (idx < 0 || idx >= years.length) return;\n      const entry = values[idx];\n      Plotly.restyle(el, { x: [entry.x], y: [entry.y], text: [entry.text], customdata: [entry.customdata] }, [0]);\n      Plotly.relayout(el, { 'sliders[0].active': idx });\n    };\n\n    const stop = () => {\n      if (timer) {\n        clearInterval(timer);\n        timer = null;\n      }\n    };\n\n    const play = () => {\n      stop();\n      let idx = 0;\n      setYear(idx);\n      timer = setInterval(() => {\n        idx += 1;\n        if (idx >= years.length) {\n          stop();\n          return;\n        }\n        setYear(idx);\n      }, speed);\n    };\n\n    const startIndex = findIndex(payload.selected_year);\n    if (startIndex >= 0) {\n      setYear(startIndex);\n    }\n\n    el.on('plotly_sliderchange', (e) => {\n      stop();\n      const idx = findIndex(e.step.label);\n      if (idx >= 0) {\n        setYear(idx);\n      }\n    });\n\n    el.on('plotly_buttonclicked', (e) => {\n      const label = e?.button?.label;\n      if (label === 'Play') {\n        play();\n      } else if (label === 'Pause') {\n        stop();\n      }\n    });\n  }",
+  jsonlite::toJSON(income_payload, auto_unbox = TRUE)
+)
+
+fig_income <- htmlwidgets::onRender(fig_income, income_js)
+
+htmltools::div(
+  class = "visual-section",
+  fig_income
+)
+```
+
+```{r continent-line-chart}
+continents <- c("Oceania", "Europe", "Americas", "Asia", "World", "Africa")
+
+continent_df <- read_csv(
+  "life-expectancy.csv"
+) %>%
+  filter(Entity %in% continents, Year >= 1950) %>%
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  mutate(
+    Entity = factor(Entity, levels = continents)
+  )
+
+continent_years <- sort(unique(continent_df$Year))
+
+get_continent_paths <- function(y) {
+  df_year <- continent_df %>% filter(Year <= y)
+  lapply(continents, function(ct) {
+    tmp <- df_year %>% filter(Entity == ct)
+    list(
+      x = tmp$Year,
+      y = tmp$life_expectancy
+    )
+  })
+}
+
+selected_cont_year <- max(continent_years)
+paths_now <- get_continent_paths(selected_cont_year)
+
+continent_year_values <- lapply(continent_years, function(y) {
+  get_continent_paths(y)
+})
+
+continent_colors <- c(
+      "#6C5280",
+      "#9C3E59",
+      "#BD6262",
+      "#E8DB74",
+      "#74852A",
+      "#DB8F48"
+)
+
+fig_cont <- plot_ly()
+
+for (i in seq_along(continents)) {
+  fig_cont <- fig_cont %>%
+    add_trace(
+      type = "scatter",
+      mode = "lines",
+      x = paths_now[[i]]$x,
+      y = paths_now[[i]]$y,
+      name = continents[i],
+      line = list(
+        width = 4,
+        shape = "spline",
+        smoothing = 1.2,
+        color = continent_colors[i]
+      ),
+      hovertemplate = paste0(
+        "<b>", continents[i], "</b><br>",
+        "Year: %{x}<br>",
+        "Life Expectancy: %{y:.1f} years<extra></extra>"
+      )
+    )
+}
+
+continent_frames <- lapply(seq_along(continent_years), function(i) {
+  list(
+    name = as.character(continent_years[i]),
+    data = lapply(continent_year_values[[i]], function(p) list(x = p$x, y = p$y))
+  )
+})
+fig_cont$x$frames <- continent_frames
+
+# Animation speed constant (ms per frame)
+continent_speed_ms <- 140
+continent_frame_opts <- list(
+  frame = list(duration = continent_speed_ms, redraw = FALSE),
+  transition = list(duration = 0),
+  mode = "immediate"
+)
+
+continent_payload <- list(
+  years = continent_years,
+  paths = continent_year_values,
+  series = continents,
+  selected_year = selected_cont_year,
+  speed_ms = continent_speed_ms
+)
+
+continent_steps <- lapply(continent_years, function(y) {
+  list(
+    label = as.character(y),
+    method = "animate",
+    args = list(
+      list(as.character(y)),
+      continent_frame_opts
+    )
+  )
+})
+
+continent_buttons <- list(
+  list(
+    label = "Play",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = continent_speed_ms, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate",
+        fromcurrent = FALSE
+      )
+    )
+  ),
+  list(
+    label = "Pause",
+    method = "animate",
+    args = list(
+      NULL,
+      list(
+        frame = list(duration = 0, redraw = FALSE),
+        transition = list(duration = 0),
+        mode = "immediate"
+      )
+    )
+  )
+)
+
+fig_cont <- fig_cont %>%
+  layout(
+    title = list(
+      text = "<b>Life Expectancy over Time by Continent (1950 - 2023)</b>",
+      x = 0.5,
+      xanchor = "center",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 33,
+        color = "#1f2933"
+      )
+    ),
+    font = list(
+      family = "Cormorant Garamond, serif", 
+      size = 18,
+      color = "#1f2933"
+    ),
+    xaxis = list(
+      title = " ",
+      range = c(min(continent_years), max(continent_years)),
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3
+    ),
+    yaxis = list(
+      title = "<b>Life Expectancy in Years</b>",
+      range = c(35, 85),
+      showgrid = TRUE,
+      gridcolor = "#422E12",
+      gridwidth = 0.3
+    ),
+    hoverlabel = list(
+      bgcolor = "#E0D7C5",
+      bordercolor = "#8A623A",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      )
+    ),
+    legend = list(
+      orientation = "h",
+      x = 0.5,
+      xanchor = "center",
+      y = -0.17,
+      yanchor = "bottom",
+      bgcolor = "rgba(0,0,0,0)",
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#1f2933"
+      )
+    ),
+    sliders = list(list(
+      active = length(continent_years) - 1,
+      currentvalue = list(
+        prefix = "<b>Calendar Year: </b>",
+        x = 0.05,
+        xanchor = "center",
+        font = list(
+          family = "Cormorant Garamond, serif",
+          size = 22,
+          color = "#1f2933"
+        )
+      ),
+      len = 0.85,
+      x = 0.09,
+      y = -0.1,
+      pad = list(t = 30),
+      steps = continent_steps,
+      bgcolor = "#8A623A",
+      bordercolor = "#E0D7C5",
+      font = list(
+        color = "#1f2933",
+        family = "Cormorant Garamond, serif",
+        size = 18
+      )
+    )),
+    updatemenus = list(list(
+      type = "buttons",
+      showactive = FALSE,
+      direction = "right",
+      x = 0.0,
+      y = -0.16,
+      xanchor = "left",
+      yanchor = "top",
+      pad = list(t = 30),
+      buttons = continent_buttons,
+      font = list(
+        family = "Cormorant Garamond, serif",
+        size = 18,
+        color = "#E0D7C5"
+      ),
+      bgcolor = "#8A623A",
+      bordercolor = "#E0D7C5"
+    )),
+    margin = list(
+      l = 80, r = 40, t = 80, b = 140
+    ),
+    
+    width = 1500,
+    height = 750,
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
+  )
+
+continent_js <- sprintf(
+  "function(el, x) {
+    const payload = %s;
+    const years = payload.years;
+    const paths = payload.paths;
+    const series = payload.series || [];
+    const speed = payload.speed_ms;
+    let timer = null;
+
+    const findIndex = (label) => years.findIndex((y) => String(y) === String(label));
+
+    const buildSummaryHTML = (idx, yearPaths) => {
+      const y = years[idx];
+      const lines = [];
+      lines.push('<b>Year: ' + y + '</b>');
+
+      yearPaths.forEach((trace, i) => {
+        const ys = trace.y || [];
+        const name = series[i] || ('Series ' + (i + 1));
+
+        if (!ys.length) return;
+        const v = ys[ys.length - 1];
+        if (v === null || v === undefined || Number.isNaN(Number(v))) return;
+
+        lines.push(name + ': ' + Number(v).toFixed(1));
+      });
+
+      return lines.join('<br>');
+    };
+
+    const setYear = (idx) => {
+      if (idx < 0 || idx >= years.length) return;
+
+      const yearPaths = paths[idx];
+      const xYear = years[idx];
+
+      // Update each line to show data up to the current year
+      yearPaths.forEach((trace, i) => {
+        Plotly.restyle(el, { x: [trace.x], y: [trace.y] }, [i]);
+      });
+
+      // Vertical guide line at the current year
+      const guideLine = {
+        type: 'line',
+        xref: 'x',
+        yref: 'paper',
+        x0: xYear,
+        x1: xYear,
+        y0: 0,
+        y1: 1,
+        line: { width: 1 }
+      };
+
+      // Summary box
+      const summary = {
+        xref: 'paper',
+        yref: 'paper',
+        x: 0.975,
+        y: 0.03,
+        xanchor: 'right',
+        yanchor: 'bottom',
+        align: 'left',
+        showarrow: false,
+        text: buildSummaryHTML(idx, yearPaths),
+        bgcolor: '#E6D2B8',
+        bordercolor: '#694725',
+        borderwidth: 1,
+        borderpad: 10,
+        font: { family: 'Cormorant Garamond, serif', size: 20, color: '#1f2933' }
+      };
+
+      Plotly.relayout(el, {
+        'sliders[0].active': idx,
+        shapes: [guideLine],
+        annotations: [summary]
+      });
+    };
+
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const play = () => {
+      stop();
+      let idx = 0;
+      setYear(idx);
+      timer = setInterval(() => {
+        idx += 1;
+        if (idx >= years.length) {
+          stop();
+          return;
+        }
+        setYear(idx);
+      }, speed);
+    };
+
+    const startIndex = findIndex(payload.selected_year);
+    if (startIndex >= 0) setYear(startIndex);
+
+    el.on('plotly_sliderchange', (e) => {
+      stop();
+      const idx = findIndex(e.step.label);
+      if (idx >= 0) setYear(idx);
+    });
+
+    el.on('plotly_buttonclicked', (e) => {
+      const label = e?.button?.label;
+      if (label === 'Play') play();
+      else if (label === 'Pause') stop();
+    });
+  }",
+  jsonlite::toJSON(continent_payload, auto_unbox = TRUE)
+)
+
+fig_cont <- htmlwidgets::onRender(fig_cont, continent_js)
+
+htmltools::div(
+  class = "visual-section",
+  fig_cont
+)
+```
