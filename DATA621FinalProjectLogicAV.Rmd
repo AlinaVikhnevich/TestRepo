@@ -1,0 +1,324 @@
+---
+title: "DATA 621 Final Project Logic"
+author: "Alina Vikhnevich"
+date: "December 10, 2025"
+output: html_document
+---
+
+```{css, echo=FALSE}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 18px;
+
+  background-image: url('https://images.pexels.com/photos/235985/pexels-photo-235985.jpeg');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  color: #1f2933;
+}
+
+.main-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.visual-section .html-widget {
+  width: 100% !important;
+  position: relative !important;
+  display: block;
+  min-height: 860px;
+}
+
+h1.title {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 30px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.2;
+}
+
+h4.author, h4.date {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 16px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.1;
+}
+
+#map-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 120px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r libraries}
+library(tidyverse)
+library(readr)
+library(jsonlite)
+library(plotly)
+library(plm)
+library(lme4)
+library(nlme)
+library(mgcv)
+library(splines)
+library(randomForest)
+library(broom)
+library(modelsummary)
+library(performance)
+```
+
+## Data Import
+
+```{r data-import}
+df <- read_csv("life-expectancy.csv")
+metadata <- fromJSON("life-expectancy.metadata.json")
+```
+
+## Data Preparation
+
+```{r data-preparation}
+df_panel <- df %>%
+  mutate(Code = toupper(Code)) %>%
+  filter(!is.na(Code)) %>%
+  select(Entity, Code, Year, `Period life expectancy at birth`) %>%
+  rename(life_expectancy = `Period life expectancy at birth`) %>%
+  group_by(Code, Entity) %>%
+  arrange(Year, .by_group = TRUE) %>%
+  tidyr::complete(Year = seq(min(Year), max(Year), by = 1)) %>%
+  tidyr::fill(Entity, .direction = "downup") %>%
+  tidyr::fill(life_expectancy, .direction = "down") %>%
+  ungroup() %>%
+  mutate(time_since_1950 = Year - 1950,
+         decade = factor(floor(Year / 10) * 10),
+         Code = factor(Code),
+         Entity = factor(Entity))
+```
+
+## Exploratory Analysis
+
+```{r exploratory-summary}
+global_trend <- df_panel %>% group_by(Year) %>% summarise(mean_life = mean(life_expectancy, na.rm = TRUE))
+country_summary <- df_panel %>% group_by(Code) %>% summarise(mean_life = mean(life_expectancy), sd_life = sd(life_expectancy), first_year = min(Year), last_year = max(Year))
+```
+
+```{r plot-global-trend}
+ggplot(global_trend, aes(x = Year, y = mean_life)) +
+  geom_line(color = "#c4a000", linewidth = 1.1) +
+  labs(title = "Global Life Expectancy Trend", x = "Year", y = "Average Life Expectancy") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+```{r plot-country-trends}
+selected_codes <- df_panel %>% group_by(Code) %>% summarise(max_year = max(Year)) %>% arrange(desc(max_year)) %>% slice_head(n = 12) %>% pull(Code)
+plot_df <- df_panel %>% filter(Code %in% selected_codes)
+plot_ly(plot_df, x = ~Year, y = ~life_expectancy, color = ~Code, type = "scatter", mode = "lines") %>%
+  layout(title = "Life Expectancy Paths for Selected Countries",
+         paper_bgcolor = "#0b1e2d",
+         plot_bgcolor = "#0b1e2d",
+         font = list(color = "#e5e7eb", family = "Cormorant Garamond"),
+         xaxis = list(title = "Year", gridcolor = "#30475e"),
+         yaxis = list(title = "Life Expectancy", gridcolor = "#30475e"))
+```
+
+```{r plot-distribution}
+df_panel %>%
+  mutate(period = case_when(Year < 1975 ~ "1950-1974", Year < 2000 ~ "1975-1999", TRUE ~ "2000-2023")) %>%
+  ggplot(aes(x = period, y = life_expectancy, fill = period)) +
+  geom_violin(color = "#0b1e2d", alpha = 0.8) +
+  geom_boxplot(width = 0.2, outlier.shape = NA, color = "#0b1e2d", alpha = 0.6) +
+  scale_fill_manual(values = c("#7f5539", "#b08968", "#e0afa0")) +
+  labs(title = "Distribution Shifts Over Time") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"),
+        legend.position = "none")
+```
+
+```{r plot-country-rank}
+rank_recent <- df_panel %>% filter(Year == max(Year)) %>% arrange(desc(life_expectancy)) %>% slice_head(n = 20)
+rank_recent %>%
+  ggplot(aes(x = reorder(Entity, life_expectancy), y = life_expectancy)) +
+  geom_col(fill = "#5e81ac", color = "#0b1e2d") +
+  coord_flip() +
+  labs(title = "Top 20 Countries in Latest Year", x = "Country", y = "Life Expectancy") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+```{r plot-variability}
+country_volatility <- df_panel %>% group_by(Code) %>% summarise(volatility = sd(life_expectancy), trend = coef(lm(life_expectancy ~ Year))[2])
+country_volatility %>%
+  ggplot(aes(x = trend, y = volatility)) +
+  geom_point(color = "#e0afa0", alpha = 0.8) +
+  geom_smooth(method = "lm", color = "#7f5539", se = FALSE) +
+  labs(title = "Trend vs Variability Across Countries", x = "Slope of Trend", y = "SD of Life Expectancy") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+## Model Building
+
+```{r model-data}
+panel_df <- pdata.frame(df_panel, index = c("Code", "Year"))
+```
+
+```{r models}
+m1_pool <- plm(life_expectancy ~ time_since_1950, data = panel_df, model = "pooling")
+m2_pool_quad <- plm(life_expectancy ~ poly(time_since_1950, 2, raw = TRUE), data = panel_df, model = "pooling")
+m3_fe <- plm(life_expectancy ~ time_since_1950, data = panel_df, model = "within")
+m4_fe_time <- plm(life_expectancy ~ time_since_1950 * decade, data = panel_df, model = "within")
+m5_re <- plm(life_expectancy ~ time_since_1950, data = panel_df, model = "random")
+m6_random_slope <- lme(life_expectancy ~ time_since_1950, random = ~ time_since_1950 | Code, data = df_panel, method = "REML")
+m7_spline <- lm(life_expectancy ~ ns(time_since_1950, df = 6) + Code, data = df_panel)
+m8_gam <- gam(life_expectancy ~ s(time_since_1950, k = 12) + s(Code, bs = "re"), data = df_panel, method = "REML")
+m9_rf <- randomForest(life_expectancy ~ time_since_1950 + Code, data = df_panel, ntree = 300, mtry = 4, importance = TRUE)
+m10_subset <- plm(life_expectancy ~ poly(time_since_1950, 2, raw = TRUE), data = panel_df %>% filter(Year >= 1980), model = "within")
+model_list <- list(m1_pool = m1_pool, m2_pool_quad = m2_pool_quad, m3_fe = m3_fe, m4_fe_time = m4_fe_time, m5_re = m5_re, m6_random_slope = m6_random_slope, m7_spline = m7_spline, m8_gam = m8_gam, m9_rf = m9_rf, m10_subset = m10_subset)
+```
+
+## Model Diagnostics
+
+```{r residuals}
+residual_df <- tibble(model = names(model_list)[1:5], resid = map(model_list[1:5], residuals), fitted = map(model_list[1:5], fitted)) %>%
+  unnest(cols = c(resid, fitted))
+```
+
+```{r plot-residuals}
+residual_df %>%
+  ggplot(aes(x = fitted, y = resid, color = model)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, color = "#7f5539", linewidth = 1.1) +
+  labs(title = "Residual vs Fitted") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+```{r plot-qq}
+residual_df %>%
+  ggplot(aes(sample = resid, color = model)) +
+  stat_qq(alpha = 0.5) +
+  stat_qq_line(color = "#7f5539") +
+  labs(title = "QQ Plot of Residuals") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+```{r plot-random-effects}
+re_effects <- ranef(m6_random_slope)
+re_df <- tibble(Code = rownames(re_effects[[1]]), intercept = re_effects[[1]][,1], slope = re_effects[[1]][,2])
+re_df %>%
+  ggplot(aes(x = intercept, y = slope)) +
+  geom_point(color = "#e0afa0", alpha = 0.7) +
+  geom_hline(yintercept = 0, color = "#7f5539") +
+  geom_vline(xintercept = 0, color = "#7f5539") +
+  labs(title = "Random Intercepts and Slopes") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+## Model Comparison
+
+```{r comparison-table}
+comparison_df <- map_df(model_list[c("m1_pool", "m2_pool_quad", "m3_fe", "m4_fe_time", "m5_re", "m6_random_slope", "m7_spline", "m8_gam", "m10_subset")], ~glance(.x), .id = "model") %>%
+  select(model, r.squared, AIC, BIC, sigma, df)
+comparison_df
+```
+
+```{r modelsummary-table}
+modelsummary(model_list[c("m1_pool", "m2_pool_quad", "m3_fe", "m4_fe_time", "m5_re", "m7_spline")], statistic = "{statistic}")
+```
+
+```{r rf-importance}
+varImpPlot(m9_rf, main = "Random Forest Variable Importance")
+```
+
+## Nonparametric Extensions
+
+```{r nonparametric}
+loess_fit <- loess(life_expectancy ~ time_since_1950, data = df_panel, span = 0.3)
+loess_df <- tibble(Year = df_panel$Year, fitted = predict(loess_fit)) %>% group_by(Year) %>% summarise(fitted = mean(fitted, na.rm = TRUE))
+ggplot() +
+  geom_line(data = global_trend, aes(x = Year, y = mean_life), color = "#5e81ac", linewidth = 1.1) +
+  geom_line(data = loess_df, aes(x = Year, y = fitted), color = "#e0afa0", linewidth = 1.2, linetype = "dashed") +
+  labs(title = "Loess Smoother vs Global Trend", y = "Life Expectancy") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+## Appendix: Model Objects
+
+```{r appendix}
+save_objects <- list(models = model_list, comparison = comparison_df, residuals = residual_df, volatility = country_volatility, loess_fit = loess_fit)
+save_objects
+```
