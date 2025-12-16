@@ -63,7 +63,7 @@ h4.author, h4.date {
 ```
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.bg = "transparent", dev.args = list(bg = "transparent"))
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
 ```{r libraries}
@@ -120,8 +120,8 @@ ggplot(global_trend, aes(x = Year, y = mean_life)) +
   geom_line(color = "#c4a000", linewidth = 1.1) +
   labs(title = "Global Life Expectancy Trend", x = "Year", y = "Average Life Expectancy") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -133,10 +133,10 @@ ggplot(global_trend, aes(x = Year, y = mean_life)) +
 ```{r plot-country-trends}
 selected_codes <- df_panel %>% group_by(Code) %>% summarise(max_year = max(Year)) %>% arrange(desc(max_year)) %>% slice_head(n = 12) %>% pull(Code)
 plot_df <- df_panel %>% filter(Code %in% selected_codes)
-  plot_ly(plot_df, x = ~Year, y = ~life_expectancy, color = ~Code, type = "scatter", mode = "lines") %>%
+plot_ly(plot_df, x = ~Year, y = ~life_expectancy, color = ~Code, type = "scatter", mode = "lines") %>%
   layout(title = "Life Expectancy Paths for Selected Countries",
-         paper_bgcolor = "rgba(0,0,0,0)",
-         plot_bgcolor = "rgba(0,0,0,0)",
+         paper_bgcolor = "#0b1e2d",
+         plot_bgcolor = "#0b1e2d",
          font = list(color = "#e5e7eb", family = "Cormorant Garamond"),
          xaxis = list(title = "Year", gridcolor = "#30475e"),
          yaxis = list(title = "Life Expectancy", gridcolor = "#30475e"))
@@ -151,8 +151,8 @@ df_panel %>%
   scale_fill_manual(values = c("#7f5539", "#b08968", "#e0afa0")) +
   labs(title = "Distribution Shifts Over Time") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -170,8 +170,8 @@ rank_recent %>%
   coord_flip() +
   labs(title = "Top 20 Countries in Latest Year", x = "Country", y = "Life Expectancy") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -188,8 +188,8 @@ country_volatility %>%
   geom_smooth(method = "lm", color = "#7f5539", se = FALSE) +
   labs(title = "Trend vs Variability Across Countries", x = "Slope of Trend", y = "SD of Life Expectancy") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -227,8 +227,8 @@ pool_diag %>%
   geom_hline(yintercept = 0, color = "#7f5539", linewidth = 1.1) +
   labs(title = "Pooled OLS Residuals vs Fitted") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -245,8 +245,8 @@ fe_diag %>%
   geom_hline(yintercept = 0, color = "#e0afa0", linewidth = 1.1) +
   labs(title = "Fixed Effects Residuals vs Fitted") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -262,8 +262,8 @@ ggplot(mixed_diag, aes(sample = resid)) +
   stat_qq_line(color = "#7f5539") +
   labs(title = "Random Intercept QQ Plot") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -282,8 +282,8 @@ re_df %>%
   geom_vline(xintercept = 0, color = "#7f5539") +
   labs(title = "Random Intercepts and Slopes") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
@@ -315,8 +315,8 @@ ggplot() +
   geom_line(data = loess_df, aes(x = Year, y = fitted), color = "#e0afa0", linewidth = 1.2, linetype = "dashed") +
   labs(title = "Loess Smoother vs Global Trend", y = "Life Expectancy") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(panel.background = element_rect(fill = NA, color = NA),
-        plot.background = element_rect(fill = NA, color = NA),
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
         panel.grid.major = element_line(color = "#30475e"),
         panel.grid.minor = element_blank(),
         text = element_text(color = "#e5e7eb"),
