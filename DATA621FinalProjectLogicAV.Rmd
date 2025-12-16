@@ -76,7 +76,6 @@ library(lme4)
 library(nlme)
 library(mgcv)
 library(splines)
-library(randomForest)
 library(broom)
 library(modelsummary)
 library(performance)
@@ -209,29 +208,24 @@ panel_df <- pdata.frame(df_panel, index = c("Code", "Year"))
 m1_pool <- plm(life_expectancy ~ time_since_1950, data = panel_df, model = "pooling")
 m2_pool_quad <- plm(life_expectancy ~ poly(time_since_1950, 2, raw = TRUE), data = panel_df, model = "pooling")
 m3_fe <- plm(life_expectancy ~ time_since_1950, data = panel_df, model = "within")
-m4_fe_time <- plm(life_expectancy ~ time_since_1950 * decade, data = panel_df, model = "within")
+m4_fe_poly <- plm(life_expectancy ~ poly(time_since_1950, 2, raw = TRUE), data = panel_df, model = "within")
 m5_re <- plm(life_expectancy ~ time_since_1950, data = panel_df, model = "random")
-m6_random_slope <- lme(life_expectancy ~ time_since_1950, random = ~ time_since_1950 | Code, data = df_panel, method = "REML")
-m7_spline <- lm(life_expectancy ~ ns(time_since_1950, df = 6) + Code, data = df_panel)
-m8_gam <- gam(life_expectancy ~ s(time_since_1950, k = 12) + s(Code, bs = "re"), data = df_panel, method = "REML")
-m9_rf <- randomForest(life_expectancy ~ time_since_1950 + Code, data = df_panel, ntree = 300, mtry = 4, importance = TRUE)
-m10_subset <- plm(life_expectancy ~ poly(time_since_1950, 2, raw = TRUE), data = panel_df %>% filter(Year >= 1980), model = "within")
-model_list <- list(m1_pool = m1_pool, m2_pool_quad = m2_pool_quad, m3_fe = m3_fe, m4_fe_time = m4_fe_time, m5_re = m5_re, m6_random_slope = m6_random_slope, m7_spline = m7_spline, m8_gam = m8_gam, m9_rf = m9_rf, m10_subset = m10_subset)
+m6_mixed_ri <- lmer(life_expectancy ~ time_since_1950 + (1 | Code), data = df_panel, REML = TRUE)
+m7_mixed_rs <- lmer(life_expectancy ~ time_since_1950 + (time_since_1950 | Code), data = df_panel, REML = TRUE)
+m8_spline_fe <- lm(life_expectancy ~ ns(time_since_1950, df = 6) + Code, data = df_panel)
+m9_gam <- gam(life_expectancy ~ s(time_since_1950, k = 12) + s(Code, bs = "re"), data = df_panel, method = "REML")
+model_list <- list(m1_pool = m1_pool, m2_pool_quad = m2_pool_quad, m3_fe = m3_fe, m4_fe_poly = m4_fe_poly, m5_re = m5_re, m6_mixed_ri = m6_mixed_ri, m7_mixed_rs = m7_mixed_rs, m8_spline_fe = m8_spline_fe, m9_gam = m9_gam)
 ```
 
 ## Model Diagnostics
 
-```{r residuals}
-residual_df <- tibble(model = names(model_list)[1:5], resid = map(model_list[1:5], residuals), fitted = map(model_list[1:5], fitted)) %>%
-  unnest(cols = c(resid, fitted))
-```
-
-```{r plot-residuals}
-residual_df %>%
-  ggplot(aes(x = fitted, y = resid, color = model)) +
-  geom_point(alpha = 0.4) +
+```{r residuals-pool}
+pool_diag <- tibble(fitted = fitted(m1_pool), resid = residuals(m1_pool))
+pool_diag %>%
+  ggplot(aes(x = fitted, y = resid)) +
+  geom_point(color = "#e0afa0", alpha = 0.4) +
   geom_hline(yintercept = 0, color = "#7f5539", linewidth = 1.1) +
-  labs(title = "Residual vs Fitted") +
+  labs(title = "Pooled OLS Residuals vs Fitted") +
   theme_minimal(base_family = "Cormorant Garamond") +
   theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
         plot.background = element_rect(fill = "#0b1e2d", color = NA),
@@ -243,12 +237,30 @@ residual_df %>%
         axis.title = element_text(color = "#e5e7eb"))
 ```
 
-```{r plot-qq}
-residual_df %>%
-  ggplot(aes(sample = resid, color = model)) +
-  stat_qq(alpha = 0.5) +
+```{r residuals-fe}
+fe_diag <- tibble(fitted = fitted(m3_fe), resid = residuals(m3_fe))
+fe_diag %>%
+  ggplot(aes(x = fitted, y = resid)) +
+  geom_point(color = "#7f5539", alpha = 0.4) +
+  geom_hline(yintercept = 0, color = "#e0afa0", linewidth = 1.1) +
+  labs(title = "Fixed Effects Residuals vs Fitted") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
+        plot.background = element_rect(fill = "#0b1e2d", color = NA),
+        panel.grid.major = element_line(color = "#30475e"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
+```
+
+```{r qq-mixed}
+mixed_diag <- tibble(resid = resid(m6_mixed_ri))
+ggplot(mixed_diag, aes(sample = resid)) +
+  stat_qq(color = "#e0afa0", alpha = 0.6) +
   stat_qq_line(color = "#7f5539") +
-  labs(title = "QQ Plot of Residuals") +
+  labs(title = "Random Intercept QQ Plot") +
   theme_minimal(base_family = "Cormorant Garamond") +
   theme(panel.background = element_rect(fill = "#0b1e2d", color = NA),
         plot.background = element_rect(fill = "#0b1e2d", color = NA),
@@ -261,7 +273,7 @@ residual_df %>%
 ```
 
 ```{r plot-random-effects}
-re_effects <- ranef(m6_random_slope)
+re_effects <- ranef(m7_mixed_rs)
 re_df <- tibble(Code = rownames(re_effects[[1]]), intercept = re_effects[[1]][,1], slope = re_effects[[1]][,2])
 re_df %>%
   ggplot(aes(x = intercept, y = slope)) +
@@ -283,17 +295,14 @@ re_df %>%
 ## Model Comparison
 
 ```{r comparison-table}
-comparison_df <- map_df(model_list[c("m1_pool", "m2_pool_quad", "m3_fe", "m4_fe_time", "m5_re", "m6_random_slope", "m7_spline", "m8_gam", "m10_subset")], ~glance(.x), .id = "model") %>%
-  select(model, r.squared, AIC, BIC, sigma, df)
+comparison_df <- tibble(model = names(model_list),
+                       AIC = map_dbl(model_list, AIC),
+                       BIC = map_dbl(model_list, BIC))
 comparison_df
 ```
 
 ```{r modelsummary-table}
-modelsummary(model_list[c("m1_pool", "m2_pool_quad", "m3_fe", "m4_fe_time", "m5_re", "m7_spline")], statistic = "{statistic}")
-```
-
-```{r rf-importance}
-varImpPlot(m9_rf, main = "Random Forest Variable Importance")
+modelsummary(model_list[c("m1_pool", "m2_pool_quad", "m3_fe", "m4_fe_poly", "m5_re", "m8_spline_fe")], statistic = "{statistic}")
 ```
 
 ## Nonparametric Extensions
@@ -319,6 +328,7 @@ ggplot() +
 ## Appendix: Model Objects
 
 ```{r appendix}
-save_objects <- list(models = model_list, comparison = comparison_df, residuals = residual_df, volatility = country_volatility, loess_fit = loess_fit)
+diagnostic_objects <- list(pool = pool_diag, fe = fe_diag, mixed = mixed_diag, random_slopes = re_df)
+save_objects <- list(models = model_list, comparison = comparison_df, diagnostics = diagnostic_objects, volatility = country_volatility, loess_fit = loess_fit)
 save_objects
 ```
