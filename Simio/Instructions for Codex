@@ -1,0 +1,147 @@
+Task for Codex: Create Version-Accurate Simio Navigation Guide
+
+Context
+I have uploaded a complete set of screenshots documenting my Simio environment into the folder:
+
+/simio
+
+
+in my testrepo.
+These screenshots include every ribbon tab, ribbon group, window list, option panel, library list, dialogs, and definitions exactly as they appear in my installation.
+
+Your role is not to rely on prior Simio knowledge, tutorials, or assumptions. You must treat the screenshots as the only source of truth.
+
+Objective
+
+Create a detailed documentation file named:
+
+Simio Navigation
+
+
+This file will serve as the authoritative navigation and UI reference for upcoming Simio projects.
+
+Required Behavior (Strict)
+
+Screenshot-driven only
+
+Base all explanations exclusively on what is visible in the screenshots.
+
+Do not introduce features, buttons, menus, or workflows that are not explicitly shown.
+
+No assumptions
+
+If a feature is not visible, do not infer its existence.
+
+If a control is disabled, hidden, or context-dependent, explicitly state that.
+
+Exact naming
+
+Use the exact labels, capitalization, and terminology as shown in the UI.
+
+Do not paraphrase ribbon names, group titles, or option labels.
+
+Version fidelity
+
+Treat this layout as version-locked.
+
+Do not generalize to “Simio usually does X” or “in other versions.”
+
+File Structure Requirements
+
+The Simio Navigation file must be organized as follows:
+
+Environment Overview
+
+Simio version (if visible)
+
+License type indicators (if visible)
+
+General UI layout description
+
+Ribbon Navigation
+
+One section per ribbon tab
+
+For each tab:
+
+Tab name
+
+Ribbon groups
+
+Buttons and controls within each group
+
+Notes on disabled or conditional items
+
+Panels and Windows
+
+Definitions window
+
+Properties panel
+
+Libraries panel
+
+Any docked or floating windows
+
+What each panel is used for, based only on visible context
+
+Libraries
+
+List all visible libraries
+
+Objects contained in each library (as visible)
+
+No speculation about hidden or unavailable libraries
+
+Dialogs and Menus
+
+Context menus
+
+Dropdowns
+
+Modal dialogs
+
+What triggers each one, if visible
+
+Navigation Rules
+
+What actions are clearly possible
+
+What actions are clearly not available
+
+UI constraints imposed by this layout
+
+Explicit Non-Goals (Do NOT do these)
+
+Do not explain modeling theory
+
+Do not suggest workflows
+
+Do not provide “how-to” modeling steps
+
+Do not reference external documentation
+
+Do not include screenshots in the output file
+
+This file is navigation and UI reference only, not a tutorial.
+
+Output Requirements
+
+Single file named Simio Navigation
+
+Written clearly, technically, and precisely
+
+Neutral, factual tone
+
+No speculative language
+
+Validation Rule
+
+If you are unsure about a UI element:
+
+State explicitly that it is unclear
+
+Cite the screenshot filename where the ambiguity appears
+
+Do not resolve ambiguity on your own
+
+This document will be used as the foundation for all future Simio guidance. Accuracy is more important than completeness.
