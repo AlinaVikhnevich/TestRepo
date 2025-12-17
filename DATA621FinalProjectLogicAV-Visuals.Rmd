@@ -117,17 +117,17 @@ country_summary <- df_panel %>% group_by(Code) %>% summarise(mean_life = mean(li
 
 ```{r plot-global-trend}
 ggplot(global_trend, aes(x = Year, y = mean_life)) +
-  geom_line(color = "#9C3E59", linewidth = 1.01) +
+  geom_line(color = "#c4a000", linewidth = 1.1) +
   labs(title = "Global Life Expectancy Trend", x = "Year", y = "Average Life Expectancy") +
   theme_minimal(base_family = "Cormorant Garamond") +
   theme(panel.background = element_rect(fill = NA, color = NA),
         plot.background = element_rect(fill = NA, color = NA),
         panel.grid.major = element_line(color = "#422E12"),
         panel.grid.minor = element_blank(),
-        text = element_text(color = "#E0D7C5"),
-        plot.title = element_text(color = "#E0D7C5"),
-        axis.text = element_text(color = "#E0D7C5"),
-        axis.title = element_text(color = "#E0D7C5"))
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
 ```
 
 ```{r plot-country-trends}
@@ -135,10 +135,10 @@ selected_codes <- df_panel %>% group_by(Code) %>% summarise(max_year = max(Year)
 plot_df <- df_panel %>% filter(Code %in% selected_codes)
 plot_ly(plot_df, x = ~Year, y = ~life_expectancy, color = ~Code, type = "scatter", mode = "lines",
         colors = c("#6C5280", "#9C3E59", "#BD6262", "#E8DB74", "#74852A", "#DB8F48")) %>%
-  layout(title = "Life Expectancy Paths for Selected Countries",
+  layout(title = list(text = "<b>Life Expectancy Paths for Selected Countries</b>", font = list(size = 22, color = "#e5e7eb")),
          paper_bgcolor = "rgba(0,0,0,0)",
          plot_bgcolor = "rgba(0,0,0,0)",
-         font = list(color = "#1f2933", family = "Cormorant Garamond"),
+         font = list(color = "#e5e7eb", family = "Cormorant Garamond"),
          xaxis = list(title = "Year", gridcolor = "#422E12"),
          yaxis = list(title = "Life Expectancy", gridcolor = "#422E12"),
          hoverlabel = list(bgcolor = "#E0D7C5", bordercolor = "#8A623A",
@@ -159,11 +159,29 @@ df_panel %>%
         plot.background = element_rect(fill = NA, color = NA),
         panel.grid.major = element_line(color = "#422E12"),
         panel.grid.minor = element_blank(),
-        text = element_text(color = "#1f2933"),
-        plot.title = element_text(color = "#1f2933"),
-        axis.text = element_text(color = "#1f2933"),
-        axis.title = element_text(color = "#1f2933"),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"),
         legend.position = "none")
+```
+
+```{r plot-country-rank}
+rank_recent <- df_panel %>% filter(Year == max(Year)) %>% arrange(desc(life_expectancy)) %>% slice_head(n = 20)
+rank_recent %>%
+  ggplot(aes(x = reorder(Entity, life_expectancy), y = life_expectancy)) +
+  geom_col(fill = "#5e81ac", color = "#0b1e2d") +
+  coord_flip() +
+  labs(title = "Top 20 Countries in Latest Year", x = "Country", y = "Life Expectancy") +
+  theme_minimal(base_family = "Cormorant Garamond") +
+  theme(panel.background = element_rect(fill = NA, color = NA),
+        plot.background = element_rect(fill = NA, color = NA),
+        panel.grid.major = element_line(color = "#422E12"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
 ```
 
 ```{r plot-variability}
@@ -179,10 +197,10 @@ country_volatility %>%
         plot.background = element_rect(fill = NA, color = NA),
         panel.grid.major = element_line(color = "#422E12"),
         panel.grid.minor = element_blank(),
-        text = element_text(color = "#1f2933"),
-        plot.title = element_text(color = "#1f2933"),
-        axis.text = element_text(color = "#1f2933"),
-        axis.title = element_text(color = "#1f2933"),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"),
         legend.position = "none")
 ```
 
@@ -208,133 +226,82 @@ model_list <- list(m1_pool = m1_pool, m2_pool_quad = m2_pool_quad, m3_fe = m3_fe
 ## Model Diagnostics
 
 ```{r residuals-pool}
-pool_diag <- tibble(
-  fitted = fitted(m1_pool),
-  resid  = residuals(m1_pool)
-)
-
+pool_diag <- tibble(fitted = fitted(m1_pool), resid = residuals(m1_pool))
 pool_diag %>%
-  ggplot(aes(x = fitted, y = resid, fill = resid)) +
-  geom_point(
-    shape  = 21,
-    color  = "#1f2933",
-    stroke = 0.1,
-    alpha  = 0.55
-  ) +
-  scale_fill_gradientn(
-    colors = c("#4B3F52", "#9C3E59", "#BD6262", "#E8DB74", "#74852A")
-  ) +
+  ggplot(aes(x = fitted, y = resid, color = resid)) +
+  geom_point(alpha = 0.55) +
+  scale_color_gradientn(colors = c("#4B3F52", "#9C3E59", "#BD6262", "#E8DB74", "#74852A")) +
   geom_hline(yintercept = 0, color = "#7f5539", linewidth = 1.1) +
   labs(title = "Pooled OLS Residuals vs Fitted") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(
-    panel.background = element_rect(fill = NA, color = NA),
-    plot.background  = element_rect(fill = NA, color = NA),
-    panel.grid.major = element_line(color = "#422E12"),
-    panel.grid.minor = element_blank(),
-    text             = element_text(color = "#1f2933"),
-    plot.title       = element_text(color = "#1f2933"),
-    axis.text        = element_text(color = "#1f2933"),
-    axis.title       = element_text(color = "#1f2933"),
-    legend.position  = "none"
-  )
+  theme(panel.background = element_rect(fill = NA, color = NA),
+        plot.background = element_rect(fill = NA, color = NA),
+        panel.grid.major = element_line(color = "#422E12"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"),
+        legend.position = "none")
 ```
 
 ```{r residuals-fe}
-fe_diag <- tibble(
-  fitted = fitted(m3_fe),
-  resid  = residuals(m3_fe)
-)
-
+fe_diag <- tibble(fitted = fitted(m3_fe), resid = residuals(m3_fe))
 fe_diag %>%
-  ggplot(aes(x = fitted, y = resid, fill = fitted)) +
-  geom_point(
-    shape  = 21,
-    color  = "#1f2933",   # border color
-    stroke = 0.1,
-    alpha  = 0.55
-  ) +
-  scale_fill_gradientn(
-    colors = c("#52396E", "#9C3E59", "#BD6262", "#E8DB74", "#74852A")
-  ) +
+  ggplot(aes(x = fitted, y = resid, color = fitted)) +
+  geom_point(alpha = 0.55) +
+  scale_color_gradientn(colors = c("#52396E", "#9C3E59", "#BD6262", "#E8DB74", "#74852A")) +
   geom_hline(yintercept = 0, color = "#e0afa0", linewidth = 1.1) +
   labs(title = "Fixed Effects Residuals vs Fitted") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(
-    panel.background = element_rect(fill = NA, color = NA),
-    plot.background  = element_rect(fill = NA, color = NA),
-    panel.grid.major = element_line(color = "#422E12"),
-    panel.grid.minor = element_blank(),
-    text             = element_text(color = "#1f2933"),
-    plot.title       = element_text(color = "#1f2933"),
-    axis.text        = element_text(color = "#1f2933"),
-    axis.title       = element_text(color = "#1f2933"),
-    legend.position  = "none"
-  )
+  theme(panel.background = element_rect(fill = NA, color = NA),
+        plot.background = element_rect(fill = NA, color = NA),
+        panel.grid.major = element_line(color = "#422E12"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"),
+        legend.position = "none")
 ```
 
 ```{r qq-mixed}
 mixed_diag <- tibble(resid = resid(m6_mixed_ri))
-
 ggplot(mixed_diag, aes(sample = resid)) +
-  stat_qq(
-    shape  = 21,
-    fill   = "#BD6262",   # interior color
-    color  = "#1f2933",   # border color
-    stroke = 0.1,
-    alpha  = 0.65
-  ) +
-  stat_qq_line(color = "#74852A", linewidth = 1.05) +
+  stat_qq(color = "#BD6262", alpha = 0.65) +
+  stat_qq_line(color = "#E8DB74", linewidth = 1.05) +
   labs(title = "Random Intercept QQ Plot") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(
-    panel.background = element_rect(fill = NA, color = NA),
-    plot.background  = element_rect(fill = NA, color = NA),
-    panel.grid.major = element_line(color = "#422E12"),
-    panel.grid.minor = element_blank(),
-    text             = element_text(color = "#1f2933"),
-    plot.title       = element_text(color = "#1f2933"),
-    axis.text        = element_text(color = "#1f2933"),
-    axis.title       = element_text(color = "#1f2933")
-  )
-
+  theme(panel.background = element_rect(fill = NA, color = NA),
+        plot.background = element_rect(fill = NA, color = NA),
+        panel.grid.major = element_line(color = "#422E12"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
 ```
 
 ```{r plot-random-effects}
 re_effects <- ranef(m7_mixed_rs)
-
-re_df <- tibble(
-  Code      = rownames(re_effects[[1]]),
-  intercept = re_effects[[1]][, 1],
-  slope     = re_effects[[1]][, 2]
-)
-
+re_df <- tibble(Code = rownames(re_effects[[1]]), intercept = re_effects[[1]][,1], slope = re_effects[[1]][,2])
 re_df %>%
-  ggplot(aes(x = intercept, y = slope, fill = slope, size = abs(intercept))) +
-  geom_point(
-    shape  = 21,
-    color  = "#1f2933",   # border
-    stroke = 0.6,
-    alpha  = 0.78
-  ) +
-  scale_fill_gradientn(
-    colors = c("#4B3F52", "#9C3E59", "#BD6262", "#E8DB74", "#74852A")
-  ) +
+  ggplot(aes(x = intercept, y = slope, color = slope, size = abs(intercept))) +
+  geom_point(alpha = 0.78) +
+  scale_color_gradientn(colors = c("#4B3F52", "#9C3E59", "#BD6262", "#E8DB74", "#74852A")) +
   geom_hline(yintercept = 0, color = "#8A623A", linewidth = 0.9, linetype = "dashed") +
   geom_vline(xintercept = 0, color = "#8A623A", linewidth = 0.9, linetype = "dashed") +
   labs(title = "Random Intercepts and Slopes") +
   theme_minimal(base_family = "Cormorant Garamond") +
-  theme(
-    panel.background = element_rect(fill = NA, color = NA),
-    plot.background  = element_rect(fill = NA, color = NA),
-    panel.grid.major = element_line(color = "#422E12"),
-    panel.grid.minor = element_blank(),
-    text             = element_text(color = "#1f2933"),
-    plot.title       = element_text(color = "#1f2933"),
-    axis.text        = element_text(color = "#1f2933"),
-    axis.title       = element_text(color = "#1f2933"),
-    legend.position  = "none"
-  )
+  theme(panel.background = element_rect(fill = NA, color = NA),
+        plot.background = element_rect(fill = NA, color = NA),
+        panel.grid.major = element_line(color = "#422E12"),
+        panel.grid.minor = element_blank(),
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"),
+        legend.position = "none")
 ```
 
 ## Model Comparison
@@ -357,17 +324,17 @@ loess_fit <- loess(life_expectancy ~ time_since_1950, data = df_panel, span = 0.
 loess_df <- tibble(Year = df_panel$Year, fitted = predict(loess_fit)) %>% group_by(Year) %>% summarise(fitted = mean(fitted, na.rm = TRUE))
 ggplot() +
   geom_line(data = global_trend, aes(x = Year, y = mean_life), color = "#BD6262", linewidth = 1.1) +
-  geom_line(data = loess_df, aes(x = Year, y = fitted), color = "#74852A", linewidth = 1.2, linetype = "dashed") +
+  geom_line(data = loess_df, aes(x = Year, y = fitted), color = "#E8DB74", linewidth = 1.2, linetype = "dashed") +
   labs(title = "Loess Smoother vs Global Trend", y = "Life Expectancy") +
   theme_minimal(base_family = "Cormorant Garamond") +
   theme(panel.background = element_rect(fill = NA, color = NA),
         plot.background = element_rect(fill = NA, color = NA),
         panel.grid.major = element_line(color = "#422E12"),
         panel.grid.minor = element_blank(),
-        text = element_text(color = "#1f2933"),
-        plot.title = element_text(color = "#1f2933"),
-        axis.text = element_text(color = "#1f2933"),
-        axis.title = element_text(color = "#1f2933"))
+        text = element_text(color = "#e5e7eb"),
+        plot.title = element_text(color = "#e5e7eb", size = 20, face = "bold"),
+        axis.text = element_text(color = "#e5e7eb"),
+        axis.title = element_text(color = "#e5e7eb"))
 ```
 
 ## Appendix: Model Objects
