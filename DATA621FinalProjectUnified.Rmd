@@ -1,0 +1,84 @@
+---
+title: "DATA 621 Unified Presentation and Logic"
+author: "Alina Vikhnevich"
+date: "December 10, 2025"
+output: html_document
+---
+
+```{css, echo=FALSE}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 18px;
+
+  background-image: url('https://images.pexels.com/photos/235985/pexels-photo-235985.jpeg');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  color: #1f2933;
+}
+
+.main-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.visual-section .html-widget {
+  width: 100% !important;
+  position: relative !important;
+  display: block;
+  min-height: 860px;
+}
+
+h1.title {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 30px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.2;
+}
+
+h4.author, h4.date {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 16px;
+  text-align: center;
+  width: 100%;
+  color: #1f2933;
+  line-height: 1.1;
+}
+
+#map-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 120px;
+}
+```
+
+```{r global-setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.bg = "transparent",
+  dev.args = list(bg = "transparent")
+)
+options(knitr.duplicate.label = "allow")
+```
+
+# Presentation Narrative
+
+```{r presentation-child, child="FinalProject_LifExpectancy_AlinaVikhnevich.Rmd"}
+```
+
+# Analytical Logic
+
+```{r logic-child, child="DATA621FinalProjectLogicAV.Rmd"}
+```
