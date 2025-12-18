@@ -61,9 +61,6 @@ h4.author, h4.date {
   padding-bottom: 120px; /* gives room for the map slider/buttons below */
 }
 ```
-# Core Research Question
-
-How has life expectancy evolved across countries over time, and to what extent do countries differ in their baseline levels and long-run trajectories?
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -604,8 +601,8 @@ fig <- fig %>% layout(
         color = "#1f2933"
       )
     ),
-    len = 0.83,
-    x = 0.12,
+    len = 0.9,
+    x = 0.05,
     y = -0.12,
     pad = list(t = 30),
     steps = map_steps,
@@ -618,7 +615,7 @@ fig <- fig %>% layout(
     showactive = FALSE,
     direction = "right",
     x = 0.035,
-    y = -0.17,
+    y = -0.47,
     xanchor = "left",
     yanchor = "top",
     pad = list(t = 30),
@@ -972,8 +969,8 @@ fig_income <- fig_income %>%
           color = "#1f2933"
         )
       ),
-      len = 0.86,
-      x = 0.08,
+      len = 0.95,
+      x = 0.01,
       y = -0.08,
       pad = list(t = 30),
       steps = income_steps,
@@ -990,7 +987,7 @@ fig_income <- fig_income %>%
       showactive = FALSE,
       direction = "right",
       x = -0.01,
-      y = -0.14,
+      y = -0.44,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
@@ -1220,8 +1217,8 @@ fig_cont <- fig_cont %>%
           color = "#1f2933"
         )
       ),
-      len = 0.85,
-      x = 0.09,
+      len = 0.88,
+      x = 0.05,
       y = -0.1,
       pad = list(t = 30),
       steps = continent_steps,
@@ -1238,7 +1235,7 @@ fig_cont <- fig_cont %>%
       showactive = FALSE,
       direction = "right",
       x = 0.0,
-      y = -0.16,
+      y = -0.46,
       xanchor = "left",
       yanchor = "top",
       pad = list(t = 30),
@@ -1318,8 +1315,8 @@ continent_js <- sprintf(
       const summary = {
         xref: 'paper',
         yref: 'paper',
-        x: 0.975,
-        y: 0.03,
+        x: 0.995,
+        y: 0.01,
         xanchor: 'right',
         yanchor: 'bottom',
         align: 'left',
@@ -1329,7 +1326,7 @@ continent_js <- sprintf(
         bordercolor: '#694725',
         borderwidth: 1,
         borderpad: 10,
-        font: { family: 'Cormorant Garamond, serif', size: 20, color: '#1f2933' }
+        font: { family: 'Cormorant Garamond, serif', size: 19, color: '#1f2933' }
       };
 
       Plotly.relayout(el, {
